@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: chvetyk_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-chvetyk}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chvetyk_password}
+      POSTGRES_DB: ${DB_NAME:-chvetyk_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chvetyk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chvetyk_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: chvetyk_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chvetyk_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chvetyk_backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${BACKEND_PORT:-3000}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-chvetyk}
+      DB_PASSWORD: ${DB_PASSWORD:-chvetyk_password}
+      DB_NAME: ${DB_NAME:-chvetyk_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      WEBAPP_URL: ${WEBAPP_URL:-http://localhost:5173}
+      API_URL: ${API_URL:-http://localhost:3000}
+      # Posiflora API (будет заполнено позже)
+      POSIFLORA_API_URL: ${POSIFLORA_API_URL:-}
+      POSIFLORA_API_KEY: ${POSIFLORA_API_KEY:-}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chvetyk_network
+    restart: unless-stopped
+
+  # Frontend Mini App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chvetyk_frontend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      VITE_API_URL: ${API_URL:-http://localhost:3000}
+      VITE_WEBAPP_URL: ${WEBAPP_URL:-http://localhost:5173}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - chvetyk_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  chvetyk_network:
+    driver: bridge

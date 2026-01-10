@@ -1,0 +1,97 @@
+:root {
+  /* Цветовая палитра (будет настроена позже) */
+  --primary-color: #FF6B9D;
+  --secondary-color: #C44569;
+  --accent-color: #FFA07A;
+  --background-color: #FFFFFF;
+  --surface-color: #F8F9FA;
+  --text-primary: #212529;
+  --text-secondary: #6C757D;
+  --border-color: #DEE2E6;
+  --success-color: #28A745;
+  --error-color: #DC3545;
+  --warning-color: #FFC107;
+
+  /* Telegram WebApp colors */
+  --tg-theme-bg-color: var(--background-color);
+  --tg-theme-text-color: var(--text-primary);
+  --tg-theme-hint-color: var(--text-secondary);
+  --tg-theme-link-color: var(--primary-color);
+  --tg-theme-button-color: var(--primary-color);
+  --tg-theme-button-text-color: #FFFFFF;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Утилиты */
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-primary {
+  background-color: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background-color: var(--surface-color);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--border-color);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.error {
+  color: var(--error-color);
+  padding: 16px;
+  text-align: center;
+}
