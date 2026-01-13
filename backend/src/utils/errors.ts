@@ -38,6 +38,13 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class TooManyRequestsError extends AppError {
+  constructor(message: string = 'Too many requests') {
+    super(429, message);
+    this.name = 'TooManyRequestsError';
+  }
+}
+
 export function handleError(error: unknown): { statusCode: number; message: string } {
   if (error instanceof AppError) {
     return {

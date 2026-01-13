@@ -1,6 +1,7 @@
 import { Context } from 'telegraf';
 import { config } from '../../config';
 import { handleMenu } from '../commands/menu';
+import { db } from '../../database/connection';
 
 export async function handleMessage(ctx: Context): Promise<void> {
   const message = (ctx.message as any)?.text;
@@ -9,8 +10,25 @@ export async function handleMessage(ctx: Context): Promise<void> {
     return;
   }
 
+  // Пропускаем команды (они обрабатываются отдельно через setupCommands)
+  // Команды обрабатываются раньше, чем этот обработчик
+  if (message.startsWith('/')) {
+    return;
+  }
+
+  const user = ctx.from;
+  if (!user) return;
+
   // Обработка текстовых сообщений (кнопки меню)
   switch (message) {
+    case 'СТАРТ':
+    case 'Старт':
+    case 'старт':
+      // Обрабатываем как команду /start
+      const { handleStart } = await import('../commands/start');
+      await handleStart(ctx);
+      return;
+
     case '📦 Мои заказы':
       await ctx.reply('Функция "Мои заказы" будет доступна после интеграции с Posiflora.');
       break;
@@ -36,8 +54,48 @@ export async function handleMessage(ctx: Context): Promise<void> {
       break;
 
     default:
-      // Для неизвестных сообщений предлагаем открыть меню
-      await handleMenu(ctx);
+      // Для неизвестных сообщений проверяем, новый ли пользователь
+      try {
+        const userId = user.id.toString();
+        const existingUser = await db.query(
+          'SELECT id FROM users WHERE telegram_id = $1',
+          [userId]
+        );
+
+        if (existingUser.rows.length === 0) {
+          // Новый пользователь - показываем первое приветственное сообщение
+          const firstMessage = 
+            `Что может делать этот бот?\n\n` +
+            `Здравствуй! Добро пожаловать в Цветочный №21! 🌱\n\n` +
+            `Мы известны своей заботой о клиентах и розами по себестоимости.\n\n` +
+            `У нас всё честно и искренне - красивые букеты в бесплатной коробке, с подкормкой и открыткой ❤️\n\n` +
+            `Оформи заказ через Mini App в боте — мы доставим цветы в Чебоксары и Новочебоксарск.\n\n` +
+            `Если возникнут вопросы, менеджер на связи с 8:00 до 24:00 🧑‍💻\n\n` +
+            `Подписывайся на наш Telegram-канал, чтобы первым узнавать о новинках и предложениях: @cvetochniy21\n\n` +
+            `Чтобы заказать нажми «СТАРТ» 👇`;
+
+          await ctx.reply(firstMessage, {
+            reply_markup: {
+              keyboard: [
+                [{ text: '/start' }],
+              ],
+              resize_keyboard: true,
+            },
+          });
+
+          // Сохраняем пользователя
+          await db.query(
+            'INSERT INTO users (telegram_id, telegram_username, name, created_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (telegram_id) DO NOTHING',
+            [userId, user.username || null, user.first_name || null]
+          );
+        } else {
+          // Существующий пользователь - показываем меню
+          await handleMenu(ctx);
+        }
+      } catch (error) {
+        console.error('Error in handleMessage:', error);
+        await handleMenu(ctx);
+      }
       break;
   }
 }

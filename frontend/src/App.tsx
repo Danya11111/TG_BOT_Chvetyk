@@ -8,6 +8,7 @@ import ProductPage from './pages/Product';
 import CartPage from './pages/Cart';
 import CheckoutPage from './pages/Checkout';
 import AboutPage from './pages/About';
+import ProfilePage from './pages/Profile';
 
 import './styles/index.css';
 
@@ -20,6 +21,25 @@ function App() {
       WebApp.ready();
       WebApp.expand();
       WebApp.enableClosingConfirmation();
+      
+      // Устанавливаем цвета приложения для единого стиля
+      WebApp.setHeaderColor('#FFCADC');
+      WebApp.backgroundColor = '#FFCADC';
+      
+      // Предотвращаем перезагрузку страницы при навигации
+      // Используем onEvent для отслеживания изменений viewport
+      WebApp.onEvent('viewportChanged', (event) => {
+        console.log('Viewport changed:', event);
+      });
+      
+      // Отключаем автоматическую перезагрузку при изменении состояния
+      if (WebApp.BackButton) {
+        WebApp.BackButton.onClick(() => {
+          // Обработка кнопки назад будет через React Router
+          window.history.back();
+        });
+      }
+      
       setIsReady(true);
     } catch (error) {
       console.error('Error initializing Telegram WebApp:', error);
@@ -32,15 +52,16 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/">
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/catalog" replace />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/about" element={<AboutPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="*" element={<Navigate to="/catalog" replace />} />
       </Routes>
     </BrowserRouter>
   );

@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -13,4 +13,6 @@ COPY . .
 EXPOSE 5173
 
 # Start development server
-CMD ["npm", "run", "dev", "--", "--host"]
+# --host 0.0.0.0 позволяет принимать запросы от всех хостов (включая ngrok)
+# В Vite 5.4+ при использовании --host проверка хоста должна быть отключена
+CMD ["npm", "run", "dev"]

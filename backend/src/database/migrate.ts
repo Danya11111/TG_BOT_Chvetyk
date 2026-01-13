@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { pool, testConnection } from './connection';
 import { logger } from '../utils/logger';
@@ -13,15 +13,29 @@ async function runMigrations(): Promise<void> {
 
     logger.info('Running migrations...');
 
-    // Чтение SQL файла миграции
-    // Для tsx используем process.cwd(), для production - __dirname из dist
-    const migrationPath = join(
-      process.cwd(),
-      process.env.NODE_ENV === 'production' ? 'dist' : 'src',
-      'database',
-      'migrations',
-      '001_initial_schema.sql'
-    );
+    // Пути к файлу миграции (для разных окружений)
+    const migrationPaths = [
+      // Для production (скомпилированный код)
+      join(process.cwd(), 'dist', 'database', 'migrations', '001_initial_schema.sql'),
+      // Для development (исходный код)
+      join(process.cwd(), 'src', 'database', 'migrations', '001_initial_schema.sql'),
+      // Для Docker
+      '/app/src/database/migrations/001_initial_schema.sql',
+    ];
+
+    let migrationPath: string | null = null;
+    for (const path of migrationPaths) {
+      if (existsSync(path)) {
+        migrationPath = path;
+        break;
+      }
+    }
+
+    if (!migrationPath) {
+      throw new Error(`Migration file not found. Checked paths: ${migrationPaths.join(', ')}`);
+    }
+
+    logger.info(`Using migration file: ${migrationPath}`);
     const migrationSQL = readFileSync(migrationPath, 'utf-8');
 
     // Выполнение миграции
@@ -33,7 +47,12 @@ async function runMigrations(): Promise<void> {
       logger.info('✅ Migrations completed successfully');
     } catch (error) {
       await client.query('ROLLBACK');
-      throw error;
+      // Игнорируем ошибки о существующих таблицах (если миграции уже выполнены)
+      if (error instanceof Error && error.message.includes('already exists')) {
+        logger.warn('Some tables already exist. Skipping...');
+      } else {
+        throw error;
+      }
     } finally {
       client.release();
     }

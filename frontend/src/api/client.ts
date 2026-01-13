@@ -1,9 +1,10 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import apiConfig from '../config/api';
+import { getTelegramInitData } from '../utils/initData';
 
 // Создание экземпляра axios
 const apiClient: AxiosInstance = axios.create({
-  baseURL: apiConfig.baseURL,
+  baseURL: apiConfig.baseURL || '', // Если пусто, используем относительный путь
   timeout: apiConfig.timeout,
   headers: apiConfig.headers,
 });
@@ -11,12 +12,16 @@ const apiClient: AxiosInstance = axios.create({
 // Интерцептор запросов
 apiClient.interceptors.request.use(
   (config) => {
-    // Можно добавить токен авторизации, если нужен
+    const initData = getTelegramInitData();
+    if (initData) {
+      config.headers = {
+        ...config.headers,
+        'X-Telegram-Init-Data': initData,
+      };
+    }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Интерцептор ответов
@@ -25,13 +30,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    // Обработка ошибок
+    if (error.code === 'ECONNABORTED') {
+      return Promise.reject(new Error('Request timed out'));
+    }
     if (error.response) {
-      console.error('API Error:', error.response.data);
-    } else if (error.request) {
-      console.error('Network Error:', error.request);
-    } else {
-      console.error('Error:', error.message);
+      if (error.response.status === 401 || error.response.status === 403) {
+        return Promise.reject(new Error('Unauthorized'));
+      }
+      return Promise.reject(error);
+    }
+    if (error.request) {
+      return Promise.reject(new Error('Network error'));
     }
     return Promise.reject(error);
   }

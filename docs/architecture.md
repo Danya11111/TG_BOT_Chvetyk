@@ -1,0 +1,27 @@
+# Архитектура
+
+## Общая схема
+- Telegram Mini App (WebView, React, @twa-dev/sdk)
+  → Backend API (Express)
+  → External APIs (Posiflora, в перспективе)
+- Telegram Bot (Telegraf) работает отдельно, но в том же бэкенд-процессе.
+
+## Separation of Concerns
+- Frontend: `pages` (маршруты/контейнеры), `components` (UI), `store` (Zustand состояние), `services` (API-вызовы), `utils`, `types`, `config`.
+- Backend: `api` (routes/controllers/middlewares), `services` (доменные операции), `utils` (валидация, ошибки, логирование), `database` (PostgreSQL/Redis), `config`.
+- В UI нет прямых API-вызовов и бизнес-логики; запросы идут через services + stores.
+
+## Поток данных
+1) Пользователь открывает Mini App в Telegram WebView.
+2) Frontend получает `initData` из TWA SDK, работает через React + Zustand, дергает backend через `/api/*`.
+3) Backend обрабатывает запросы через маршруты → контроллеры → сервисы:
+   - Валидация и нормализация входных данных.
+   - Единый формат успешных ответов (success-response).
+   - Централизованный error-handler.
+4) Интеграции с внешними системами (Posiflora) подключаются в сервисном слое (в текущей версии заглушки).
+
+## Ключевые элементы
+- Логи: общий winston-logger (консоль + файлы), уровень зависит от `NODE_ENV`.
+- Кэш: Redis (см. `database/redis.ts`), TTL вынесен в `utils/constants.ts`.
+- Пагинация: типизирована через `types/pagination.ts`.
+- Бот: Telegraf, команды/handlers вынесены отдельно, graceful shutdown.

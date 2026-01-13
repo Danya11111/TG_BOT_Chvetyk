@@ -1,31 +1,10 @@
 import apiClient from './client';
-
-export interface Product {
-  id: number;
-  name: string;
-  description?: string;
-  price: number;
-  old_price?: number;
-  currency: string;
-  category_id?: number;
-  category_name?: string;
-  images: string[];
-  in_stock: boolean;
-  stock_quantity?: number;
-  article?: string;
-  sku?: string;
-  bonus_percent?: number;
-}
+import { Category, Pagination, Product } from '../types/catalog';
 
 export interface ProductsResponse {
   success: boolean;
   data: Product[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    total_pages: number;
-  };
+  pagination?: Pagination;
 }
 
 // Получить список товаров
@@ -42,5 +21,16 @@ export const getProducts = async (params?: {
 // Получить один товар
 export const getProduct = async (id: number): Promise<{ success: boolean; data: Product }> => {
   const response = await apiClient.get(`/api/products/${id}`);
+  return response.data;
+};
+
+export interface CategoriesResponse {
+  success: boolean;
+  data: Category[];
+}
+
+// Получить список категорий
+export const getCategories = async (): Promise<CategoriesResponse> => {
+  const response = await apiClient.get<CategoriesResponse>('/api/categories');
   return response.data;
 };

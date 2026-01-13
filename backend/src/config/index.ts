@@ -2,6 +2,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const requiredInProduction = [
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_NAME',
+  'TELEGRAM_BOT_TOKEN',
+  'API_URL',
+  'WEBAPP_URL',
+  'CORS_ORIGIN',
+];
+
 export const config = {
   // Server
   port: parseInt(process.env.BACKEND_PORT || '3000', 10),
@@ -45,12 +57,29 @@ export const config = {
   
   // CORS
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173'],
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+      'http://localhost:5173',
+      'https://kyong-unsonorous-sceptically.ngrok-free.dev',
+      /\.ngrok-free\.app$/,
+      /\.ngrok-free\.dev$/,
+      /\.ngrok\.io$/,
+    ],
     credentials: true,
   },
 };
 
-// Валидация обязательных переменных
-if (!config.telegram.botToken) {
-  throw new Error('TELEGRAM_BOT_TOKEN is required');
+function validateEnv(): void {
+  if (!config.telegram.botToken) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required');
+  }
+
+  if (config.nodeEnv === 'production') {
+    requiredInProduction.forEach((key) => {
+      if (!process.env[key]) {
+        throw new Error(`Environment variable ${key} is required in production`);
+      }
+    });
+  }
 }
+
+validateEnv();
