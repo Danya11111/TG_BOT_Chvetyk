@@ -13,7 +13,7 @@ export default function ProfilePage() {
   
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
-  const { addresses, addAddress, removeAddress } = useProfileStore();
+  const { addresses, addAddress } = useProfileStore();
 
   // Получаем данные пользователя из Telegram
   const user = WebApp.initDataUnsafe?.user;
@@ -37,11 +37,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleRemoveAddress = (index: number) => {
-    if (window.confirm('Удалить этот адрес?')) {
-      removeAddress(index);
-    }
-  };
 
   return (
     <div style={{ 
@@ -328,7 +323,7 @@ export default function ProfilePage() {
             </p>
             <button
               onClick={() => {
-                WebApp.openTelegramLink('https://t.me/cvetochnyj21_bot');
+                WebApp.openTelegramLink('https://t.me/FlowersStudioBot');
               }}
               style={{
                 width: '100%',
@@ -542,7 +537,7 @@ export default function ProfilePage() {
         backgroundColor: '#FFFFFF',
         zIndex: 998
       }}>
-        @cvetochnyj21_bot
+        @FlowersStudioBot
       </div>
     </div>
   );

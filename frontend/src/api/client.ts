@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosHeaders } from 'axios';
 import apiConfig from '../config/api';
 import { getTelegramInitData } from '../utils/initData';
 
@@ -14,10 +14,9 @@ apiClient.interceptors.request.use(
   (config) => {
     const initData = getTelegramInitData();
     if (initData) {
-      config.headers = {
-        ...config.headers,
-        'X-Telegram-Init-Data': initData,
-      };
+      const headers = config.headers ? new AxiosHeaders(config.headers) : new AxiosHeaders();
+      headers.set('X-Telegram-Init-Data', initData);
+      config.headers = headers;
     }
     return config;
   },

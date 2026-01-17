@@ -8,7 +8,12 @@ export interface ProductListResult {
 
 export async function fetchProducts(params?: {
   categoryId?: number;
+  categorySlug?: string;
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  sort?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   page?: number;
   limit?: number;
 }): Promise<ProductListResult> {

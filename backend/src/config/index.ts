@@ -47,6 +47,14 @@ export const config = {
     apiKey: process.env.POSIFLORA_API_KEY || '',
     // Дополнительные настройки будут добавлены позже
   },
+
+  // Скрейпер каталога с сайта клиента
+  scraper: {
+    baseUrl: process.env.SCRAPER_BASE_URL || 'https://cvety-cheboksary.ru',
+    cron: process.env.SCRAPER_CRON || '0 * * * *', // ежечасно
+    enabled: process.env.SCRAPER_ENABLED !== 'false',
+    maxProducts: parseInt(process.env.SCRAPER_MAX_PRODUCTS || '500', 10),
+  },
   
   // Managers for notifications
   managers: {

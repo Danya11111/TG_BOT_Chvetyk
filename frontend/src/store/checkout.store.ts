@@ -18,8 +18,11 @@ export interface CheckoutFormData {
   pickupPointId?: number;
   deliveryDate?: string;
   deliveryTime?: string;
+  recipientName?: string;
+  recipientPhone?: string;
+  cardText?: string;
   comment: string;
-  paymentType: 'cash' | 'card' | 'online';
+  paymentType: 'cash' | 'vtb_token';
 }
 
 interface CheckoutStore {

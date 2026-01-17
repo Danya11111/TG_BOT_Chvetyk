@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { useProductStore } from '../store/product.store';
+import { Button } from '../components/ui/Button';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,77 +15,80 @@ export default function ProductPage() {
   useEffect(() => {
     const loadProduct = async () => {
       if (!id) return;
-      
       try {
         await fetchProduct(parseInt(id, 10));
       } catch (err: any) {
         console.error('Error loading product:', err);
       }
     };
-
     loadProduct();
     return () => reset();
   }, [id, fetchProduct, reset]);
 
+  // Handle Telegram Main Button
   useEffect(() => {
     if (product) {
-      WebApp.MainButton.setText(`Добавить в корзину - ${(product.price * quantity).toLocaleString('ru-RU')} ₽`);
+      WebApp.MainButton.setText(`Добавить в корзину • ${(product.price * quantity).toLocaleString('ru-RU')} ₽`);
+      WebApp.MainButton.enable();
       WebApp.MainButton.show();
-      WebApp.MainButton.onClick(() => {
-        if (product) {
-          addItem({
-            productId: product.id,
-            productName: product.name,
-            price: product.price,
-            quantity,
-            image: product.images?.[0],
-          });
-          WebApp.showAlert(`Товар "${product.name}" добавлен в корзину!`);
-          navigate('/cart');
-        }
-      });
+      
+      const handleMainButtonClick = () => {
+        addItem({
+          productId: product.id,
+          productName: product.name,
+          price: product.price,
+          quantity,
+          image: product.images?.[0],
+        });
+        WebApp.HapticFeedback.notificationOccurred('success');
+        navigate('/cart');
+      };
+
+      WebApp.MainButton.onClick(handleMainButtonClick);
+
+      return () => {
+        WebApp.MainButton.offClick(handleMainButtonClick);
+        WebApp.MainButton.hide();
+      };
     }
-    
-    return () => {
-      WebApp.MainButton.hide();
-    };
   }, [product, quantity, addItem, navigate]);
 
   const increaseQuantity = () => {
     const maxQuantity = product?.stock_quantity || 99;
     if (quantity < maxQuantity) {
-      setQuantity(quantity + 1);
+      setQuantity(q => q + 1);
+      WebApp.HapticFeedback.impactOccurred('light');
     }
   };
 
   const decreaseQuantity = () => {
     if (quantity > 1) {
-      setQuantity(quantity - 1);
+      setQuantity(q => q - 1);
+      WebApp.HapticFeedback.impactOccurred('light');
     }
   };
 
   if (loading) {
     return (
       <div className="container" style={{ paddingTop: '20px' }}>
-        <div className="loading">Загрузка товара...</div>
+         <div style={{ aspectRatio: '1', borderRadius: '12px', marginBottom: '20px' }} className="skeleton" />
+         <div style={{ height: '30px', width: '70%', marginBottom: '10px' }} className="skeleton" />
+         <div style={{ height: '20px', width: '40%' }} className="skeleton" />
       </div>
     );
   }
 
   if (error || !product) {
     return (
-      <div className="container" style={{ paddingTop: '20px' }}>
-        <div className="error">{error || 'Товар не найден'}</div>
-        <button
-          className="btn btn-secondary"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/catalog', { replace: false });
-          }}
-          style={{ marginTop: '16px', width: '100%' }}
-        >
+      <div className="container" style={{ paddingTop: '60px', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🥀</div>
+        <h2 className="text-h2" style={{ marginBottom: '10px' }}>Товар не найден</h2>
+        <p className="text-body" style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          Возможно, он был удален или перемещен.
+        </p>
+        <Button onClick={() => navigate('/catalog')}>
           Вернуться в каталог
-        </button>
+        </Button>
       </div>
     );
   }
@@ -92,60 +96,47 @@ export default function ProductPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#FFFFFF',
-      paddingBottom: '80px'
-    }}>
-      {/* Заголовок с кнопкой назад */}
+      backgroundColor: 'var(--background-color)',
+      paddingBottom: '20px'
+    }} className="fade-in">
+      
+      {/* Sticky Header with Back Button */}
       <div style={{
-        backgroundColor: '#FFCADC',
-        padding: '12px 16px',
-        color: '#2D1B2E',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
         position: 'sticky',
         top: 0,
-        zIndex: 100
+        zIndex: 50,
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        background: 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: 'blur(10px)'
       }}>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/catalog', { replace: false });
-          }}
+        <button 
+          onClick={() => navigate(-1)}
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}
         >
-          <svg 
-            width="20" 
-            height="20" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
-        <div style={{ fontSize: '16px', fontWeight: 'bold', flex: 1 }}>
-          Товар
-        </div>
       </div>
 
-      {/* Изображение товара */}
+      {/* Main Image */}
       <div style={{ 
         width: '100%',
         aspectRatio: '1',
-        backgroundColor: '#F8F9FA',
-        position: 'relative'
+        backgroundColor: '#FFFFFF',
+        marginTop: '-64px', /* Pull up behind header */
+        zIndex: 1
       }}>
         {product.images && product.images.length > 0 ? (
           <img
@@ -156,9 +147,6 @@ export default function ProductPage() {
               height: '100%',
               objectFit: 'cover',
             }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x600?text=Цветы';
-            }}
           />
         ) : (
           <div style={{
@@ -167,79 +155,115 @@ export default function ProductPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '120px'
+            fontSize: '80px',
+            color: '#E0E0E0',
+            backgroundColor: '#F0F2F5'
           }}>
             🌺
           </div>
         )}
       </div>
 
-      <div className="container" style={{ paddingTop: '20px' }}>
-        {/* Название и цена */}
-        <h1 style={{ 
-          fontSize: '24px', 
-          marginBottom: '12px',
-          fontWeight: '600'
-        }}>
-          {product.name}
-        </h1>
-
-        {product.category_name && (
-          <p style={{ 
-            fontSize: '14px', 
-            color: '#495057',
-            marginBottom: '16px'
-          }}>
-            {product.category_name}
-          </p>
-        )}
-
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '12px',
-          marginBottom: '20px',
-          flexWrap: 'wrap'
-        }}>
-          <p style={{ 
-            fontSize: '28px', 
-            fontWeight: 'bold',
-            color: '#FF6B9D',
-            margin: 0
-          }}>
-            {product.price.toLocaleString('ru-RU')} ₽
-          </p>
-          {product.old_price && product.old_price > product.price && (
-            <p style={{ 
-              fontSize: '18px', 
-              color: '#495057',
-              textDecoration: 'line-through',
-              margin: 0
+      {/* Content Container */}
+      <div style={{
+        position: 'relative',
+        marginTop: '-20px',
+        borderTopLeftRadius: '24px',
+        borderTopRightRadius: '24px',
+        backgroundColor: 'var(--background-color)',
+        padding: '24px 16px',
+        zIndex: 2,
+        boxShadow: '0 -10px 20px rgba(0,0,0,0.05)'
+      }}>
+        
+        {/* Header Info */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+            <h1 className="text-h2" style={{ lineHeight: 1.2 }}>{product.name}</h1>
+            <div style={{ textAlign: 'right' }}>
+               <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--primary-color)' }}>
+                 {product.price.toLocaleString('ru-RU')} ₽
+               </div>
+               {product.old_price && product.old_price > product.price && (
+                 <div style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                   {product.old_price.toLocaleString('ru-RU')} ₽
+                 </div>
+               )}
+            </div>
+          </div>
+          {product.category_name && (
+            <span style={{ 
+              display: 'inline-block',
+              marginTop: '8px',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              backgroundColor: 'var(--surface-color)',
+              color: 'var(--text-secondary)',
+              fontSize: '12px',
+              fontWeight: 500,
+              boxShadow: 'var(--shadow-sm)'
             }}>
-              {product.old_price.toLocaleString('ru-RU')} ₽
-            </p>
+              {product.category_name}
+            </span>
           )}
         </div>
 
-        {/* Описание */}
-        {product.description && (
+        {/* Quantity Selector */}
+        {product.in_stock ? (
           <div style={{ 
+            backgroundColor: 'var(--surface-color)', 
+            padding: '16px', 
+            borderRadius: '16px',
             marginBottom: '24px',
-            padding: '16px',
-            backgroundColor: '#F8F9FA',
-            borderRadius: '12px'
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            <h2 style={{ 
-              fontSize: '18px', 
-              marginBottom: '12px',
-              fontWeight: '600'
-            }}>
-              Описание
-            </h2>
-            <p style={{ 
-              fontSize: '16px',
-              lineHeight: '1.6',
-              color: '#212529',
+            <span className="text-body" style={{ fontWeight: 500 }}>Количество</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <button 
+                onClick={decreaseQuantity}
+                className="btn btn-secondary"
+                style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px' }}
+                disabled={quantity <= 1}
+              >
+                -
+              </button>
+              <span style={{ fontSize: '18px', fontWeight: 600, minWidth: '24px', textAlign: 'center' }}>
+                {quantity}
+              </span>
+              <button 
+                onClick={increaseQuantity}
+                className="btn btn-secondary"
+                style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px' }}
+                disabled={quantity >= (product.stock_quantity || 99)}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#FFF5F5',
+            color: 'var(--error-color)',
+            borderRadius: '12px',
+            textAlign: 'center',
+            marginBottom: '24px',
+            fontWeight: 500
+          }}>
+            Товара временно нет в наличии
+          </div>
+        )}
+
+        {/* Description */}
+        {product.description && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 className="text-h3" style={{ marginBottom: '12px' }}>Описание</h3>
+            <p className="text-body" style={{ 
+              color: 'var(--text-secondary)', 
+              lineHeight: 1.6,
               whiteSpace: 'pre-wrap'
             }}>
               {product.description}
@@ -247,128 +271,15 @@ export default function ProductPage() {
           </div>
         )}
 
-        {/* Наличие */}
-        <div style={{ marginBottom: '24px' }}>
-          {product.in_stock ? (
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: '#D4EDDA',
-              color: '#155724',
-              borderRadius: '20px',
-              fontSize: '14px'
-            }}>
-              <span>✓</span>
-              <span>В наличии</span>
-              {product.stock_quantity && (
-                <span>(осталось {product.stock_quantity} шт.)</span>
-              )}
-            </div>
-          ) : (
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: '#F8D7DA',
-              color: '#721C24',
-              borderRadius: '20px',
-              fontSize: '14px'
-            }}>
-              <span>✗</span>
-              <span>Нет в наличии</span>
-            </div>
-          )}
-        </div>
-
-        {/* Выбор количества */}
-        {product.in_stock && (
-          <div style={{ marginBottom: '24px' }}>
-            <p style={{ 
-              fontSize: '16px', 
-              marginBottom: '12px',
-              fontWeight: '500'
-            }}>
-              Количество:
-            </p>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-              width: 'fit-content'
-            }}>
-              <button
-                onClick={decreaseQuantity}
-                disabled={quantity <= 1}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  border: '2px solid #DEE2E6',
-                  backgroundColor: quantity <= 1 ? '#F8F9FA' : '#FFFFFF',
-                  cursor: quantity <= 1 ? 'not-allowed' : 'pointer',
-                  fontSize: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: quantity <= 1 ? '#6C757D' : '#212529'
-                }}
-              >
-                −
-              </button>
-              <span style={{ 
-                fontSize: '20px', 
-                fontWeight: '600',
-                minWidth: '40px',
-                textAlign: 'center'
-              }}>
-                {quantity}
-              </span>
-              <button
-                onClick={increaseQuantity}
-                disabled={quantity >= (product.stock_quantity || 99)}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  border: '2px solid #DEE2E6',
-                  backgroundColor: quantity >= (product.stock_quantity || 99) ? '#F8F9FA' : '#FFFFFF',
-                  cursor: quantity >= (product.stock_quantity || 99) ? 'not-allowed' : 'pointer',
-                  fontSize: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: quantity >= (product.stock_quantity || 99) ? '#6C757D' : '#212529'
-                }}
-              >
-                +
-              </button>
-            </div>
-            <p style={{ 
-              fontSize: '18px', 
-              fontWeight: 'bold',
-              marginTop: '16px',
-              color: '#FF6B9D'
-            }}>
-              Итого: {(product.price * quantity).toLocaleString('ru-RU')} ₽
-            </p>
-          </div>
-        )}
-
-        {/* Дополнительная информация */}
+        {/* Attributes (if any) */}
         {product.article && (
-          <div style={{
-            padding: '12px',
-            backgroundColor: '#F8F9FA',
-            borderRadius: '8px',
-            marginTop: '16px',
-            fontSize: '14px',
-            color: '#6C757D'
-          }}>
-            Артикул: {product.article}
-          </div>
+           <div style={{ 
+             marginTop: '32px', 
+             paddingTop: '16px', 
+             borderTop: '1px solid var(--surface-secondary)' 
+           }}>
+             <p className="text-caption">Артикул: {product.article}</p>
+           </div>
         )}
       </div>
     </div>

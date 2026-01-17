@@ -26,11 +26,16 @@ export default function CheckoutPage() {
       email: '',
       deliveryType: 'delivery',
       address: {
-        city: 'Москва',
+        city: 'Чебоксары',
         street: '',
         house: '',
         apartment: '',
       },
+      deliveryDate: '',
+      deliveryTime: '',
+      recipientName: '',
+      recipientPhone: '',
+      cardText: '',
       comment: '',
       paymentType: 'cash',
     };
@@ -62,6 +67,28 @@ export default function CheckoutPage() {
       if (!formData.address.house.trim()) {
         newErrors.house = 'Введите номер дома';
       }
+    }
+
+    if (!formData.deliveryDate) {
+      newErrors.deliveryDate = 'Укажите дату';
+    }
+
+    if (!formData.deliveryTime) {
+      newErrors.deliveryTime = 'Укажите время';
+    }
+
+    if (!formData.recipientName?.trim()) {
+      newErrors.recipientName = 'Введите имя получателя';
+    }
+
+    if (!formData.recipientPhone?.trim()) {
+      newErrors.recipientPhone = 'Введите телефон получателя';
+    } else if (!/^(\+7|8)?[\s-]?\(?[489][0-9]{2}\)?[\s-]?[0-9]{3}[\s-]?[0-9]{2}[\s-]?[0-9]{2}$/.test(formData.recipientPhone.replace(/\s/g, ''))) {
+      newErrors.recipientPhone = 'Введите корректный номер';
+    }
+
+    if (!formData.cardText?.trim()) {
+      newErrors.cardText = 'Добавьте текст открытки';
     }
 
     setErrors(newErrors);
@@ -452,6 +479,171 @@ export default function CheckoutPage() {
             </div>
           </div>
         )}
+        
+        <div style={{ marginTop: '16px', backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '12px', border: '1px solid #FFCADC', color: '#2D1B2E', fontSize: '14px', lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600, marginBottom: '6px' }}>Условия доставки</div>
+          <div>• Чебоксары — бесплатно; Новый город — 300 ₽; Новочебоксарск, Кугеси, Лапсары — 400 ₽; другие районы — по договоренности.</div>
+          <div>• Время работы доставки: 09:00–21:00 (после 21:00 +500 ₽, согласуем заранее).</div>
+          <div>• Среднее время доставки: 1–2 часа.</div>
+        </div>
+      </div>
+
+      {/* Дата и время доставки/самовывоза */}
+      <div style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '16px',
+        border: '1px solid #DEE2E6'
+      }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+          Дата и время
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+              Дата <span style={{ color: '#DC3545' }}>*</span>
+            </label>
+            <input
+              type="date"
+              value={formData.deliveryDate || ''}
+              onChange={(e) => handleInputChange('deliveryDate', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: errors.deliveryDate ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                color: '#2D1B2E',
+                backgroundColor: '#FFFFFF'
+              }}
+            />
+            {errors.deliveryDate && (
+              <p style={{ color: '#DC3545', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryDate}</p>
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+              Время <span style={{ color: '#DC3545' }}>*</span>
+            </label>
+            <input
+              type="time"
+              value={formData.deliveryTime || ''}
+              onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: errors.deliveryTime ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                color: '#2D1B2E',
+                backgroundColor: '#FFFFFF'
+              }}
+            />
+            {errors.deliveryTime && (
+              <p style={{ color: '#DC3545', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryTime}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Получатель */}
+      <div style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '16px',
+        border: '1px solid #DEE2E6'
+      }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+          Данные получателя
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+              Имя получателя <span style={{ color: '#DC3545' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.recipientName || ''}
+              onChange={(e) => handleInputChange('recipientName', e.target.value)}
+              placeholder="Кому доставить букет"
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: errors.recipientName ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                color: '#2D1B2E',
+                backgroundColor: '#FFFFFF'
+              }}
+            />
+            {errors.recipientName && (
+              <p style={{ color: '#DC3545', fontSize: '12px', marginTop: '4px' }}>{errors.recipientName}</p>
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+              Телефон получателя <span style={{ color: '#DC3545' }}>*</span>
+            </label>
+            <input
+              type="tel"
+              value={formData.recipientPhone || ''}
+              onChange={(e) => handleInputChange('recipientPhone', e.target.value)}
+              placeholder="+7 (999) 123-45-67"
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: errors.recipientPhone ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                color: '#2D1B2E',
+                backgroundColor: '#FFFFFF'
+              }}
+            />
+            {errors.recipientPhone && (
+              <p style={{ color: '#DC3545', fontSize: '12px', marginTop: '4px' }}>{errors.recipientPhone}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Открытка */}
+      <div style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '16px',
+        border: '1px solid #DEE2E6'
+      }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '12px', fontWeight: '600', color: '#2D1B2E' }}>
+          Текст открытки
+        </h2>
+        <textarea
+          value={formData.cardText || ''}
+          onChange={(e) => handleInputChange('cardText', e.target.value)}
+          placeholder="Что написать в открытке"
+          rows={3}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '8px',
+            border: errors.cardText ? '2px solid #DC3545' : '1px solid #DEE2E6',
+            fontSize: '16px',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            boxSizing: 'border-box',
+            color: '#2D1B2E',
+            backgroundColor: '#FFFFFF'
+          }}
+        />
+        {errors.cardText && (
+          <p style={{ color: '#DC3545', fontSize: '12px', marginTop: '4px' }}>{errors.cardText}</p>
+        )}
       </div>
 
       {/* Способ оплаты */}
@@ -469,8 +661,7 @@ export default function CheckoutPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {[
             { value: 'cash', label: 'Наличными при получении', icon: '💵' },
-            { value: 'card', label: 'Картой при получении', icon: '💳' },
-            { value: 'online', label: 'Онлайн оплата', icon: '💻' },
+            { value: 'vtb_token', label: 'Оплата токеном ВТБ', icon: '💳' },
           ].map((payment) => (
             <label
               key={payment.value}
@@ -497,6 +688,9 @@ export default function CheckoutPage() {
             </label>
           ))}
         </div>
+        <p style={{ marginTop: '10px', fontSize: '13px', color: '#6C757D' }}>
+          Онлайн-оплату по токену ВТБ подтвердим и проведём после оформления заказа.
+        </p>
       </div>
 
       {/* Комментарий */}

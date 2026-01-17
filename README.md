@@ -170,9 +170,9 @@ TG_BOT_Chvetyk/
 ## 📋 Референсы
 
 Боты на основе которых делается проект:
-- @cvetochnyj21_bot
+- @FlowersStudioBot
 - @BunchMskBot
-- @lllllllllmbot (текущий бот)
+- @FlowersStudioBot (текущий бот)
 
 ## ⚡ Быстрый старт
 
@@ -188,7 +188,7 @@ docker-compose exec backend npm run migrate
 # 3. Загрузите тестовые данные (13 товаров и 5 категорий)
 docker-compose exec backend npm run seed
 
-# 4. Откройте бота в Telegram: @lllllllllmbot
+# 4. Откройте бота в Telegram: @FlowersStudioBot
 # 5. Отправьте /start и нажмите кнопку "🌺 Открыть каталог"
 ```
 

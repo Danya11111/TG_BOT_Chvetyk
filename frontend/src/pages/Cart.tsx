@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -45,17 +46,18 @@ export default function CartPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#FFFFFF',
-      paddingBottom: '60px'
+      backgroundColor: 'var(--bg-main)',
+      paddingBottom: '100px'
     }}>
       {/* Заголовок с кнопкой назад */}
       <div style={{
-        backgroundColor: '#FFCADC',
+        backgroundColor: 'var(--bg-surface)',
         padding: '12px 16px',
-        color: '#2D1B2E',
+        color: 'var(--text-primary)',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '12px',
+        borderBottom: '1px solid rgba(0,0,0,0.05)'
       }}>
         <button
           onClick={(e) => {
@@ -69,37 +71,38 @@ export default function CartPage() {
             padding: '4px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            color: 'var(--text-primary)'
           }}
         >
           <svg 
-            width="20" 
-            height="20" 
+            width="24" 
+            height="24" 
             viewBox="0 0 24 24" 
             fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2.5" 
+            stroke="currentColor"
+            strokeWidth="2" 
             strokeLinecap="round" 
             strokeLinejoin="round"
           >
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
         </button>
-        <div style={{ fontSize: '16px', fontWeight: 'bold', flex: 1 }}>
+        <div style={{ fontSize: '17px', fontWeight: '600', flex: 1 }}>
           Корзина
         </div>
       </div>
 
-      <div className="container" style={{ paddingTop: '20px', paddingBottom: '100px' }}>
+      <div className="container" style={{ paddingTop: '20px' }}>
       
       {items.length === 0 ? (
         <div style={{ 
           padding: '60px 20px',
           textAlign: 'center',
-          color: '#495057'
+          color: 'var(--text-secondary)'
         }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>🛒</div>
-          <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '500' }}>
+          <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)' }}>
             Корзина пуста
           </p>
           <p style={{ marginBottom: '24px', fontSize: '14px' }}>
@@ -111,7 +114,7 @@ export default function CartPage() {
               e.preventDefault();
               navigate('/catalog', { replace: false });
             }}
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '14px' }}
           >
             Перейти в каталог
           </button>
@@ -124,11 +127,11 @@ export default function CartPage() {
               <div
                 key={item.productId}
                 style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-lg)',
                   padding: '16px',
                   marginBottom: '12px',
-                  border: '1px solid #DEE2E6',
+                  boxShadow: 'var(--shadow-sm)',
                   display: 'flex',
                   gap: '12px'
                 }}
@@ -142,7 +145,7 @@ export default function CartPage() {
                       width: '80px',
                       height: '80px',
                       objectFit: 'cover',
-                      borderRadius: '8px',
+                      borderRadius: 'var(--radius-md)',
                       flexShrink: 0
                     }}
                     onError={(e) => {
@@ -153,8 +156,8 @@ export default function CartPage() {
                   <div style={{
                     width: '80px',
                     height: '80px',
-                    backgroundColor: '#F8F9FA',
-                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-input)',
+                    borderRadius: 'var(--radius-md)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -166,26 +169,26 @@ export default function CartPage() {
                 )}
 
                 {/* Информация о товаре */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                   <h3 style={{
-                    fontSize: '16px',
-                    marginBottom: '8px',
+                    fontSize: '15px',
+                    marginBottom: '4px',
                     fontWeight: '500',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
-                    color: '#2D1B2E'
+                    color: 'var(--text-primary)'
                   }}>
                     {item.productName}
                   </h3>
                   
                   <p style={{
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: '#FFCADC',
-                    marginBottom: '12px'
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: 'var(--text-primary)',
+                    marginBottom: 'auto'
                   }}>
                     {item.price.toLocaleString('ru-RU')} ₽
                   </p>
@@ -194,53 +197,60 @@ export default function CartPage() {
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    marginTop: '12px'
                   }}>
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '12px'
+                      gap: '8px',
+                      backgroundColor: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '2px'
                     }}>
                       <button
                         onClick={() => handleDecreaseQuantity(item.productId, item.quantity)}
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '28px',
+                          height: '28px',
                           borderRadius: '6px',
-                          border: '1px solid #DEE2E6',
+                          border: 'none',
                           backgroundColor: '#FFFFFF',
                           cursor: 'pointer',
-                          fontSize: '18px',
+                          fontSize: '16px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          justifyContent: 'center',
+                          color: 'var(--text-primary)',
+                          boxShadow: 'var(--shadow-sm)'
                         }}
                       >
                         −
                       </button>
                       <span style={{
-                        fontSize: '16px',
+                        fontSize: '14px',
                         fontWeight: '600',
-                        minWidth: '24px',
+                        minWidth: '20px',
                         textAlign: 'center',
-                        color: '#2D1B2E'
+                        color: 'var(--text-primary)'
                       }}>
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => handleIncreaseQuantity(item.productId, item.quantity)}
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '28px',
+                          height: '28px',
                           borderRadius: '6px',
-                          border: '1px solid #DEE2E6',
+                          border: 'none',
                           backgroundColor: '#FFFFFF',
                           cursor: 'pointer',
-                          fontSize: '18px',
+                          fontSize: '16px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          justifyContent: 'center',
+                          color: 'var(--text-primary)',
+                          boxShadow: 'var(--shadow-sm)'
                         }}
                       >
                         +
@@ -250,27 +260,17 @@ export default function CartPage() {
                     <button
                       onClick={() => handleRemoveItem(item.productId)}
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #DC3545',
-                        backgroundColor: '#FFFFFF',
-                        color: '#DC3545',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-error)',
                         cursor: 'pointer',
-                        fontSize: '12px'
+                        fontSize: '13px',
+                        fontWeight: '500'
                       }}
                     >
                       Удалить
                     </button>
                   </div>
-
-                  <p style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    marginTop: '8px',
-                    color: '#212529'
-                  }}>
-                    Итого: {(item.price * item.quantity).toLocaleString('ru-RU')} ₽
-                  </p>
                 </div>
               </div>
             ))}
@@ -278,10 +278,11 @@ export default function CartPage() {
 
           {/* Итоговая сумма */}
           <div style={{
-            backgroundColor: '#F8F9FA',
-            borderRadius: '12px',
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: 'var(--radius-lg)',
             padding: '20px',
-            marginBottom: '20px'
+            marginBottom: '20px',
+            boxShadow: 'var(--shadow-sm)'
           }}>
             <div style={{
               display: 'flex',
@@ -289,21 +290,21 @@ export default function CartPage() {
               alignItems: 'center',
               marginBottom: '12px'
             }}>
-              <span style={{ fontSize: '16px', color: '#2D1B2E' }}>Товаров:</span>
-              <span style={{ fontSize: '16px', fontWeight: '600', color: '#2D1B2E' }}>{getItemCount()} шт.</span>
+              <span style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>Товаров:</span>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>{getItemCount()} шт.</span>
             </div>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               paddingTop: '12px',
-              borderTop: '1px solid #DEE2E6'
+              borderTop: '1px solid rgba(0,0,0,0.05)'
             }}>
-              <span style={{ fontSize: '20px', fontWeight: '600', color: '#2D1B2E' }}>Итого:</span>
+              <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>Итого:</span>
               <span style={{ 
-                fontSize: '24px', 
-                fontWeight: 'bold',
-                color: '#FFCADC'
+                fontSize: '22px', 
+                fontWeight: '800',
+                color: 'var(--text-primary)'
               }}>
                 {getTotal().toLocaleString('ru-RU')} ₽
               </span>
@@ -317,8 +318,14 @@ export default function CartPage() {
                 clearCart();
               }
             }}
-            className="btn btn-secondary"
-            style={{ width: '100%', marginBottom: '12px' }}
+            className="btn"
+            style={{ 
+              width: '100%', 
+              marginBottom: '12px',
+              backgroundColor: 'transparent',
+              color: 'var(--text-tertiary)',
+              fontSize: '14px'
+            }}
           >
             Очистить корзину
           </button>
@@ -326,143 +333,7 @@ export default function CartPage() {
       )}
       </div>
 
-      {/* Нижняя навигация */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#FFCADC',
-        padding: '8px 0',
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        zIndex: 1000
-      }}>
-        <div 
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/catalog', { replace: false });
-          }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-            color: '#2D1B2E'
-          }}
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-          </svg>
-          <span style={{ fontSize: '10px' }}>Каталог</span>
-        </div>
-        
-        <div 
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/cart', { replace: false });
-          }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-            color: '#2D1B2E'
-          }}
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <path d="M16 10a4 4 0 0 1-8 0"></path>
-          </svg>
-          <span style={{ fontSize: '10px' }}>Корзина</span>
-        </div>
-        
-        <div 
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/profile', { replace: false });
-          }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-            color: '#2D1B2E'
-          }}
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="8" r="5"></circle>
-            <path d="M3 21c0-5 4-9 9-9s9 4 9 9"></path>
-          </svg>
-          <span style={{ fontSize: '10px' }}>Профиль</span>
-        </div>
-        
-        <div 
-          onClick={(e) => {
-            e.preventDefault();
-            navigate('/about', { replace: false });
-          }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-            color: '#2D1B2E'
-          }}
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="#2D1B2E"
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="16" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-          </svg>
-          <span style={{ fontSize: '10px' }}>О нас</span>
-        </div>
-      </div>
+      <BottomNavigation />
     </div>
   );
 }

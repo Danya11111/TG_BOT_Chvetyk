@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Plugin } from 'vite';
 import type { Connect } from 'vite';
 

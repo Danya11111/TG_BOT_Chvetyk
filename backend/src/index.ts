@@ -3,6 +3,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { testConnection } from './database/connection';
 import { startBot } from './bot/bot';
+import { startScraperScheduler } from './scraper/scheduler';
 
 async function startServer(): Promise<void> {
   try {
@@ -24,6 +25,9 @@ async function startServer(): Promise<void> {
     // Запуск Telegram Bot
     logger.info('Starting Telegram Bot...');
     await startBot();
+
+    // Запуск скрейпера каталога (ежечасно)
+    startScraperScheduler();
 
     // Graceful shutdown
     process.on('SIGTERM', () => {

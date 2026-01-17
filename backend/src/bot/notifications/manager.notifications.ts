@@ -13,6 +13,9 @@ interface NewOrderNotification {
 
 export async function notifyManagerNewOrder(order: NewOrderNotification): Promise<void> {
   try {
+    // Уведомления временно выключены по запросу заказчика
+    return;
+
     const bot = getBot();
     
     const message = 

@@ -40,12 +40,12 @@ services:
   # Backend API
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: chvetyk_backend
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${BACKEND_PORT:-3000}
+      NODE_ENV: ${NODE_ENV:-production}
+      BACKEND_PORT: ${BACKEND_PORT:-3000}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-chvetyk}
@@ -53,45 +53,22 @@ services:
       DB_NAME: ${DB_NAME:-chvetyk_db}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8503829137:AAGLWoNoCRFucHgo4xw5IvJVvwo_HagmrMM}
-      WEBAPP_URL: ${WEBAPP_URL:-https://kyong-unsonorous-sceptically.ngrok-free.dev}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      WEBAPP_URL: ${WEBAPP_URL:-http://localhost:3000}
       API_URL: ${API_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      USE_SAMPLE_PRODUCTS: ${USE_SAMPLE_PRODUCTS:-false}
+      DISABLE_RATE_LIMIT: ${DISABLE_RATE_LIMIT:-false}
       # Posiflora API (будет заполнено позже)
       POSIFLORA_API_URL: ${POSIFLORA_API_URL:-}
       POSIFLORA_API_KEY: ${POSIFLORA_API_KEY:-}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - ./backend/logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - chvetyk_network
-    restart: unless-stopped
-
-  # Frontend Mini App
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: chvetyk_frontend
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-      VITE_WEBAPP_URL: ${WEBAPP_URL:-http://localhost:5173}
-    ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      backend:
-        condition: service_started
     networks:
       - chvetyk_network
     restart: unless-stopped

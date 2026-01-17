@@ -10,7 +10,12 @@ export interface ProductsResponse {
 // Получить список товаров
 export const getProducts = async (params?: {
   categoryId?: number;
+  categorySlug?: string;
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  sort?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   page?: number;
   limit?: number;
 }): Promise<ProductsResponse> => {

@@ -65,19 +65,92 @@ export default function AboutPage() {
         borderRadius: '12px',
         marginBottom: '20px'
       }}>
-        <p style={{ marginBottom: '16px', lineHeight: '1.6' }}>
-          Информация о компании будет добавлена позже.
+        <h2 style={{ margin: '0 0 12px', fontSize: '18px', color: '#2D1B2E' }}>
+          Говорящие цветы
+        </h2>
+        <p style={{ marginBottom: '10px', lineHeight: '1.6', color: '#495057' }}>
+          Цветочный сервис в Чебоксарах. Собираем букеты с 09:00 до 21:00 и доставляем в течение 1–2 часов по городу и ближайшим районам.
         </p>
-        <p style={{ color: '#495057', fontSize: '14px' }}>
-          Вы можете связаться с нами для получения дополнительной информации.
+        <p style={{ margin: 0, color: '#2D1B2E', fontWeight: 500 }}>
+          Оформляйте заказы в боте FlowersStudioBot — отвечаем быстро.
         </p>
       </div>
 
       <div style={{ marginTop: '24px' }}>
         <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Контакты</h2>
-        <p style={{ color: '#495057', fontSize: '14px' }}>
-          Контактная информация будет добавлена позже.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: '#2D1B2E', fontSize: '14px' }}>
+          <div><strong>Телефон:</strong> <a href="tel:+79603068713" style={{ color: '#2D1B2E' }}>8-960-306-87-13</a></div>
+          <div><strong>Email:</strong> <a href="mailto:flowers-cheb2014@yandex.ru" style={{ color: '#2D1B2E' }}>flowers-cheb2014@yandex.ru</a></div>
+          <div><strong>Адрес:</strong> г. Чебоксары, ул. Университетская, 38/3</div>
+          <div><strong>График:</strong> ежедневно 09:00–21:00</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+            <span style={{ fontWeight: 600 }}>Социальные сети:</span>
+            <a href="https://t.me/flowerscheb" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Telegram: @flowerscheb</a>
+            <a href="https://www.instagram.com/tf_flowers_21" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Instagram: @tf_flowers_21</a>
+            <a href="https://vk.com/torgflowers" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>VK: vk.com/torgflowers</a>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+            <span style={{ fontWeight: 600 }}>Ссылки:</span>
+            <a href="https://cvety-cheboksary.ru" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Официальный сайт</a>
+            <a href="https://yandex.ru/profile/47796378484?lang=ru" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Яндекс.Карты</a>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Доставка</h2>
+        <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '16px', border: '1px solid #FFCADC' }}>
+          <div style={{ marginBottom: '8px', fontWeight: 600, color: '#2D1B2E' }}>Стоимость по зонам (09:00–21:00):</div>
+          <ul style={{ margin: '0 0 12px 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+            <li>Чебоксары — бесплатно</li>
+            <li>Новый город — 300 ₽</li>
+            <li>Новочебоксарск — 400 ₽</li>
+            <li>Кугеси — 400 ₽</li>
+            <li>Лапсары — 400 ₽</li>
+            <li>Другие районы — по договоренности с менеджером</li>
+          </ul>
+          <div style={{ color: '#495057', fontSize: '14px' }}>
+            • Доставляем с 09:00 до 21:00 (после 21:00 +500 ₽, согласовываем заранее).<br/>
+            • Среднее время доставки: 1–2 часа.<br/>
+            • Заказы на ночь оформляйте с 09:00 до 21:00.<br/>
+            • Минимальной суммы заказа нет.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Самовывоз</h2>
+        <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '16px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
+          <div style={{ marginBottom: '8px' }}><strong>Адрес:</strong> ул. Университетская, 38 к. 3, Чебоксары, 428034</div>
+          <div style={{ marginBottom: '8px' }}><strong>Время работы точки:</strong> 09:00–21:00</div>
+          <div style={{ color: '#495057', fontSize: '14px' }}>
+            Подробные инструкции по самовывозу уточняются — менеджер напишет после оформления заказа.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Бонусы и оплата</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '14px', border: '1px solid #FFCADC', color: '#2D1B2E' }}>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>Бонусная программа</div>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+              <li>Начисляем 5% от суммы заказа.</li>
+              <li>Начисление не распространяется на оплату доставки.</li>
+              <li>Списание до 10% от суммы заказа (не действует на акции).</li>
+              <li>Списывать можно только на товары, доставку бонусами не оплачиваем.</li>
+              <li>Минимальной суммы для начисления/списания нет.</li>
+              <li>Округляем начисление вверх до целого рубля.</li>
+            </ul>
+          </div>
+          <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '14px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>Способы оплаты</div>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+              <li>Наличные при получении.</li>
+              <li>Токен от ВТБ (онлайн-оплата по токену).</li>
+            </ul>
+          </div>
+        </div>
       </div>
       </div>
 

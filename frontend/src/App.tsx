@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 
-import HomePage from './pages/Home';
 import CatalogPage from './pages/Catalog';
 import ProductPage from './pages/Product';
 import CartPage from './pages/Cart';
@@ -23,8 +22,9 @@ function App() {
       WebApp.enableClosingConfirmation();
       
       // Устанавливаем цвета приложения для единого стиля
-      WebApp.setHeaderColor('#FFCADC');
-      WebApp.backgroundColor = '#FFCADC';
+      // Using #F7F9FC (var(--bg-main)) for header to blend with page
+      WebApp.setHeaderColor('#F7F9FC'); 
+      WebApp.backgroundColor = '#F7F9FC';
       
       // Предотвращаем перезагрузку страницы при навигации
       // Используем onEvent для отслеживания изменений viewport

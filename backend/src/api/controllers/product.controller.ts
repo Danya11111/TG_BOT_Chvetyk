@@ -7,6 +7,7 @@ class ProductController {
   async list(req: Request, res: Response): Promise<void> {
     const filters: ProductFilters = {
       categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string, 10) : undefined,
+      categorySlug: req.query.categorySlug ? String(req.query.categorySlug) : undefined,
       search: req.query.search ? String(req.query.search) : undefined,
       inStock:
         req.query.inStock === 'true'
@@ -18,6 +19,9 @@ class ProductController {
       maxPrice: req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : undefined,
       page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
       limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 20,
+      sort: ['price_asc', 'price_desc', 'newest', 'oldest'].includes(String(req.query.sort))
+        ? (req.query.sort as ProductFilters['sort'])
+        : 'newest',
     };
 
     const result = await productService.getProducts(filters);

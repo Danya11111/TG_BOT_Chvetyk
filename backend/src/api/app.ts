@@ -2,6 +2,8 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import Joi from 'joi';
+import fs from 'fs';
+import path from 'path';
 import { config } from '../config';
 import { ForbiddenError } from '../utils/errors';
 import { requestLogger } from './middlewares/request-logger';
@@ -33,14 +35,14 @@ export function createApp(): Express {
           styleSrc: ["'self'"],
           imgSrc: ["'self'", 'data:', 'https:'],
           connectSrc: ["'self'"],
-          frameAncestors: ["'none'"],
+          frameAncestors: ["'self'"],
           objectSrc: ["'none'"],
         },
       },
       referrerPolicy: { policy: 'no-referrer' },
       crossOriginResourcePolicy: { policy: 'same-origin' },
       crossOriginOpenerPolicy: { policy: 'same-origin' },
-      frameguard: { action: 'deny' },
+      frameguard: { action: 'sameorigin' },
       hsts: config.nodeEnv === 'production',
     })
   );
@@ -86,6 +88,23 @@ export function createApp(): Express {
   app.use('/api/bonus', telegramAuthMiddleware, writeRateLimiter, bonusRoutes);
   app.use('/api/users', telegramAuthMiddleware, writeRateLimiter, usersRoutes);
   app.use('/api/pickup', telegramAuthMiddleware, writeRateLimiter, pickupRoutes);
+
+  // Serve frontend static build if present
+  const staticPath = path.resolve(__dirname, '../../frontend/dist');
+  if (fs.existsSync(staticPath)) {
+    app.use(express.static(staticPath));
+    app.get('*', (req, res, next) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/bot') ||
+        req.path.startsWith('/auth') ||
+        req.path.startsWith('/webhook')
+      ) {
+        return next();
+      }
+      return res.sendFile(path.join(staticPath, 'index.html'));
+    });
+  }
 
   // 404 + errors
   app.use(notFoundHandler);

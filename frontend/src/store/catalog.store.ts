@@ -4,26 +4,35 @@ import {
   fetchProducts as loadProducts,
 } from '../services/catalog.service';
 import { Category, Product } from '../types/catalog';
-import { filterProductsByQuery } from '../utils/product-filter';
 
 interface CatalogState {
   products: Product[];
   categories: Category[];
   selectedCategoryId?: number;
   searchQuery: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStockOnly: boolean;
+  sort: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   loading: boolean;
   error?: string;
   fetchCategories: () => Promise<void>;
   fetchProducts: () => Promise<void>;
   setCategory: (categoryId?: number) => void;
   setSearchQuery: (query: string) => void;
-  getFilteredProducts: () => Product[];
+  setPriceRange: (min?: number, max?: number) => void;
+  setInStockOnly: (value: boolean) => void;
+  setSort: (value: 'price_asc' | 'price_desc' | 'newest' | 'oldest') => void;
 }
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   products: [],
   categories: [],
   searchQuery: '',
+  minPrice: undefined,
+  maxPrice: undefined,
+  inStockOnly: false,
+  sort: 'newest',
   loading: false,
   error: undefined,
 
@@ -38,7 +47,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       const { products } = await loadProducts({
         categoryId: get().selectedCategoryId,
         search: get().searchQuery,
-        limit: 50,
+        minPrice: get().minPrice,
+        maxPrice: get().maxPrice,
+        inStock: get().inStockOnly ? true : undefined,
+        sort: get().sort,
+        limit: 100,
       });
       set({ products });
     } catch (_error) {
@@ -56,8 +69,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     set({ searchQuery: query });
   },
 
-  getFilteredProducts() {
-    const { products, searchQuery } = get();
-    return filterProductsByQuery(products, searchQuery);
+  setPriceRange(min, max) {
+    set({ minPrice: min, maxPrice: max });
+  },
+
+  setInStockOnly(value) {
+    set({ inStockOnly: value });
+  },
+
+  setSort(value) {
+    set({ sort: value });
   },
 }));

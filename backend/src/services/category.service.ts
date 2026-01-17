@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { cache } from '../database/redis';
 import { CACHE_TTL } from '../utils/constants';
 import { NotFoundError } from '../utils/errors';
+import sampleCatalog from '../data/sample-catalog.json';
 
 export interface Category {
   id: number;
@@ -20,7 +21,14 @@ export interface Category {
 }
 
 export class CategoryService {
+  private useSample = process.env.USE_SAMPLE_PRODUCTS === 'true';
+
   async getCategories(): Promise<Category[]> {
+    if (this.useSample) {
+      const categories: Category[] = sampleCatalog.categories as unknown as Category[];
+      await cache.set('categories:all', categories, CACHE_TTL.CATEGORIES);
+      return categories;
+    }
     try {
       // Проверка кэша
       const cacheKey = 'categories:all';
@@ -60,11 +68,17 @@ export class CategoryService {
       return categories;
     } catch (error) {
       logger.error('Error fetching categories:', error);
-      throw error;
+      const categories: Category[] = sampleCatalog.categories as unknown as Category[];
+      await cache.set('categories:all', categories, CACHE_TTL.CATEGORIES);
+      return categories;
     }
   }
 
   async getCategoryById(id: number): Promise<Category> {
+    if (this.useSample) {
+      const cat = (sampleCatalog.categories as unknown as Category[]).find((c) => c.id === id);
+      if (cat) return cat;
+    }
     try {
       const query = `
         SELECT 
@@ -96,6 +110,8 @@ export class CategoryService {
       };
     } catch (error) {
       logger.error(`Error fetching category ${id}:`, error);
+      const cat = (sampleCatalog.categories as unknown as Category[]).find((c) => c.id === id);
+      if (cat) return cat;
       throw error;
     }
   }

@@ -14,7 +14,8 @@ async function increment(key: string, windowSeconds: number): Promise<number> {
     const tx = client.multi();
     tx.incr(key);
     tx.expire(key, windowSeconds);
-    const [, count] = (await tx.exec()) as [unknown, number][];
+    const execResult = await tx.exec();
+    const count = execResult && Array.isArray(execResult) ? (execResult[0] as number) : 0;
     return count ?? 0;
   } catch {
     const current = (await cache.get<number>(key)) || 0;
@@ -26,6 +27,9 @@ async function increment(key: string, windowSeconds: number): Promise<number> {
 
 function buildLimiter({ keyPrefix, limit, windowSeconds }: RateLimitOptions) {
   return async (req: Request, _res: Response, next: NextFunction) => {
+    if (process.env.DISABLE_RATE_LIMIT === 'true') {
+      return next();
+    }
     const userKey = req.user?.id ? `user:${req.user.id}` : '';
     const ipKey = req.ip || req.socket.remoteAddress || 'unknown';
     const key = `${keyPrefix}:${userKey || ipKey}`;
