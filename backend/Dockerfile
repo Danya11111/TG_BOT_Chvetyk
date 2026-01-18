@@ -1,4 +1,4 @@
-FROM node:20-alpine AS frontend-build
+FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -8,7 +8,7 @@ RUN npm install --no-audit --no-fund --omit=optional
 COPY frontend ./
 RUN npm run build
 
-FROM node:20-alpine AS backend-build
+FROM node:20-slim AS backend-build
 
 WORKDIR /app/backend
 
@@ -18,7 +18,7 @@ RUN npm install --no-audit --no-fund --omit=optional
 COPY backend ./
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
