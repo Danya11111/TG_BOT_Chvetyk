@@ -3,9 +3,10 @@ FROM node:20-slim AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm install --no-audit --no-fund --omit=optional
+RUN npm install --no-audit --no-fund
 
 COPY frontend ./
+ENV ROLLUP_SKIP_NODEJS_NATIVE=1
 RUN npm run build
 
 FROM node:20-slim AS backend-build
@@ -13,7 +14,7 @@ FROM node:20-slim AS backend-build
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
-RUN npm install --no-audit --no-fund --omit=optional
+RUN npm install --no-audit --no-fund
 
 COPY backend ./
 RUN npm run build
