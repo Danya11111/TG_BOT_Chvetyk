@@ -3,7 +3,7 @@ FROM node:20-alpine AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund --omit=optional
 
 COPY frontend ./
 RUN npm run build
@@ -13,7 +13,7 @@ FROM node:20-alpine AS backend-build
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
-RUN npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund --omit=optional
 
 COPY backend ./
 RUN npm run build
