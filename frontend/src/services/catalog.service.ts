@@ -19,7 +19,18 @@ export async function fetchProducts(params?: {
   limit?: number;
 }): Promise<ProductListResult> {
   try {
-    const response = await getProducts(params);
+    const cleanedParams = Object.fromEntries(
+      Object.entries(params || {}).filter(([, value]) => {
+        if (value === undefined || value === null) {
+          return false;
+        }
+        if (typeof value === 'string') {
+          return value.trim().length > 0;
+        }
+        return true;
+      })
+    );
+    const response = await getProducts(cleanedParams);
     return {
       products: response.data ?? [],
       pagination: response.pagination,
