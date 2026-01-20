@@ -1,13 +1,17 @@
 // Конфигурация API клиента
-// Для ngrok: используем относительный путь, Vite proxy обработает запрос
-// Vite proxy перенаправляет /api на backend:3000
+// В проде и в Telegram WebApp используем origin, в dev - Vite proxy или VITE_API_URL
 const getApiUrl = () => {
-  // Если открыто через HTTPS (ngrok), используем относительный путь (Vite proxy)
-  if (window.location.protocol === 'https:') {
-    return ''; // Относительный путь - Vite proxy обработает
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    return envUrl;
   }
-  // Для localhost используем прямой URL к API
-  return import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  if (typeof window !== 'undefined') {
+    const { protocol, origin } = window.location;
+    if (protocol === 'http:' || protocol === 'https:') {
+      return origin;
+    }
+  }
+  return '';
 };
 
 const API_URL = getApiUrl();
