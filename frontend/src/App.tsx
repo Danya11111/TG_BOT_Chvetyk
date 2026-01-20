@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 
-import HomePage from './pages/Home';
 import CatalogPage from './pages/Catalog';
 import ProductPage from './pages/Product';
 import CartPage from './pages/Cart';
 import CheckoutPage from './pages/Checkout';
 import AboutPage from './pages/About';
+import ProfilePage from './pages/Profile';
 
 import './styles/index.css';
 
@@ -20,6 +20,26 @@ function App() {
       WebApp.ready();
       WebApp.expand();
       WebApp.enableClosingConfirmation();
+      
+      // Устанавливаем цвета приложения для единого стиля
+      // Using #F7F9FC (var(--bg-main)) for header to blend with page
+      WebApp.setHeaderColor('#F7F9FC'); 
+      WebApp.backgroundColor = '#F7F9FC';
+      
+      // Предотвращаем перезагрузку страницы при навигации
+      // Используем onEvent для отслеживания изменений viewport
+      WebApp.onEvent('viewportChanged', (event) => {
+        console.log('Viewport changed:', event);
+      });
+      
+      // Отключаем автоматическую перезагрузку при изменении состояния
+      if (WebApp.BackButton) {
+        WebApp.BackButton.onClick(() => {
+          // Обработка кнопки назад будет через React Router
+          window.history.back();
+        });
+      }
+      
       setIsReady(true);
     } catch (error) {
       console.error('Error initializing Telegram WebApp:', error);
@@ -32,15 +52,16 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/">
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/catalog" replace />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/about" element={<AboutPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="*" element={<Navigate to="/catalog" replace />} />
       </Routes>
     </BrowserRouter>
   );

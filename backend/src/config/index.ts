@@ -1,6 +1,19 @@
 import dotenv from 'dotenv';
+import { customerData } from './customer-data';
 
 dotenv.config();
+
+const requiredInProduction = [
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_NAME',
+  'TELEGRAM_BOT_TOKEN',
+  'API_URL',
+  'WEBAPP_URL',
+  'CORS_ORIGIN',
+];
 
 export const config = {
   // Server
@@ -35,22 +48,57 @@ export const config = {
     apiKey: process.env.POSIFLORA_API_KEY || '',
     // Дополнительные настройки будут добавлены позже
   },
+
+  // Скрейпер каталога с сайта клиента
+  scraper: {
+    baseUrl: process.env.SCRAPER_BASE_URL || 'https://cvety-cheboksary.ru',
+    cron: process.env.SCRAPER_CRON || '0 * * * *', // ежечасно
+    enabled: process.env.SCRAPER_ENABLED !== 'false',
+    maxProducts: parseInt(process.env.SCRAPER_MAX_PRODUCTS || '500', 10),
+  },
   
   // Managers for notifications
   managers: {
     telegramIds: process.env.MANAGER_TELEGRAM_IDS 
       ? process.env.MANAGER_TELEGRAM_IDS.split(',').map(id => id.trim())
       : [],
+    groupChatId: customerData.managerGroupChatId,
+  },
+
+  // Support contacts
+  support: {
+    managerPhone: customerData.managerPhone,
   },
   
   // CORS
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173'],
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+      'http://localhost:5173',
+      'https://kyong-unsonorous-sceptically.ngrok-free.dev',
+      /\.ngrok-free\.app$/,
+      /\.ngrok-free\.dev$/,
+      /\.ngrok\.io$/,
+    ],
     credentials: true,
+  },
+
+  migrations: {
+    enabled: process.env.RUN_MIGRATIONS !== 'false',
   },
 };
 
-// Валидация обязательных переменных
-if (!config.telegram.botToken) {
-  throw new Error('TELEGRAM_BOT_TOKEN is required');
+function validateEnv(): void {
+  if (!config.telegram.botToken) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required');
+  }
+
+  if (config.nodeEnv === 'production') {
+    requiredInProduction.forEach((key) => {
+      if (!process.env[key]) {
+        throw new Error(`Environment variable ${key} is required in production`);
+      }
+    });
+  }
 }
+
+validateEnv();

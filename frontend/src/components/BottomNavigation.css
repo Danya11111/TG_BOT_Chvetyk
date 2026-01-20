@@ -1,0 +1,71 @@
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0,0,0,0.05);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom)) 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 1000;
+  box-shadow: 0 -10px 30px rgba(0,0,0,0.02);
+}
+
+.bottom-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  width: 64px;
+  height: 48px;
+  background: none;
+  border: none;
+  padding: 0;
+  position: relative;
+}
+
+.bottom-nav__icon-wrapper {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-nav__item--active .bottom-nav__icon-wrapper {
+  transform: translateY(-2px);
+  color: var(--color-accent);
+}
+
+.bottom-nav__label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  transition: color 0.3s ease;
+  opacity: 0.8;
+}
+
+.bottom-nav__item--active .bottom-nav__label {
+  font-weight: 600;
+  color: var(--color-accent);
+  opacity: 1;
+}
+
+/* Optional active dot indicator */
+.bottom-nav__item--active::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  width: 4px;
+  height: 4px;
+  background-color: var(--color-primary-dark);
+  border-radius: 50%;
+  opacity: 0; /* Hidden for now, can be enabled for 'notification' style */
+}

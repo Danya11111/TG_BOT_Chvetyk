@@ -1,24 +1,16 @@
-import { Router, Request, Response } from 'express';
-import { logger } from '../../utils/logger';
+import { Router } from 'express';
+import { categoryController } from '../controllers/category.controller';
+import { asyncHandler } from '../middlewares/async-handler';
+import { validateRequest } from '../middlewares/validate-request';
+import { emptyQuerySchema, idParamSchema } from '../validation/common.schema';
 
 const router = Router();
 
-// GET /api/categories - Получить список категорий
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    // TODO: Реализация после интеграции с Posiflora
-    res.json({
-      success: true,
-      data: [],
-      message: 'Categories list will be available after Posiflora integration',
-    });
-  } catch (error) {
-    logger.error('Error fetching categories:', error);
-    res.status(500).json({
-      success: false,
-      error: { message: 'Failed to fetch categories' },
-    });
-  }
-});
+router.get('/', validateRequest(emptyQuerySchema, 'query'), asyncHandler(categoryController.list.bind(categoryController)));
+router.get(
+  '/:id',
+  validateRequest(idParamSchema, 'params'),
+  asyncHandler(categoryController.getById.bind(categoryController))
+);
 
 export default router;

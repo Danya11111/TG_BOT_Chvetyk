@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS products (
   bonus_percent DECIMAL(5, 2),
   weight DECIMAL(10, 2),
   attributes JSONB DEFAULT '{}'::jsonb,
+  sort_order INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

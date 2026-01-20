@@ -1,10 +1,15 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import Joi from 'joi';
+import fs from 'fs';
+import path from 'path';
 import { config } from '../config';
-import { logger } from '../utils/logger';
-import { handleError } from '../utils/errors';
+import { ForbiddenError } from '../utils/errors';
+import { requestLogger } from './middlewares/request-logger';
+import { errorHandler } from './middlewares/error-handler';
+import { notFoundHandler } from './middlewares/not-found-handler';
 
-// Импорт маршрутов (будут созданы позже)
 import productsRoutes from './routes/products.routes';
 import categoriesRoutes from './routes/categories.routes';
 import cartRoutes from './routes/cart.routes';
@@ -12,57 +17,100 @@ import ordersRoutes from './routes/orders.routes';
 import bonusRoutes from './routes/bonus.routes';
 import usersRoutes from './routes/users.routes';
 import pickupRoutes from './routes/pickup.routes';
+import configRoutes from './routes/config.routes';
+import { telegramAuthMiddleware } from './middlewares/telegram-auth';
+import { readRateLimiter, writeRateLimiter } from './middlewares/rate-limit';
 
 export function createApp(): Express {
   const app = express();
 
-  // Middleware
-  app.use(cors(config.cors));
+  const corsWhitelist = config.cors.origin;
+  const originSchema = Joi.string().uri({ scheme: ['http', 'https'] });
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'self'"],
+          objectSrc: ["'none'"],
+        },
+      },
+      referrerPolicy: { policy: 'no-referrer' },
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+      crossOriginOpenerPolicy: { policy: 'same-origin' },
+      frameguard: { action: 'sameorigin' },
+      hsts: config.nodeEnv === 'production',
+    })
+  );
+
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (!origin) {
+          return callback(null, true);
+        }
+        const { error } = originSchema.validate(origin);
+        if (error) {
+          return callback(new ForbiddenError('Origin rejected'));
+        }
+        const allowed = corsWhitelist.some((allowedOrigin) =>
+          typeof allowedOrigin === 'string'
+            ? allowedOrigin === origin
+            : allowedOrigin.test(origin)
+        );
+        if (!allowed) {
+          return callback(new ForbiddenError('Origin not allowed'));
+        }
+        return callback(null, true);
+      },
+      credentials: true,
+    })
+  );
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-
-  // Логирование запросов
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    logger.debug(`${req.method} ${req.path}`);
-    next();
-  });
+  app.use(requestLogger);
 
   // Health check
-  app.get('/health', (req: Request, res: Response) => {
+  app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   // API Routes
-  app.use('/api/products', productsRoutes);
-  app.use('/api/categories', categoriesRoutes);
-  app.use('/api/cart', cartRoutes);
-  app.use('/api/orders', ordersRoutes);
-  app.use('/api/bonus', bonusRoutes);
-  app.use('/api/users', usersRoutes);
-  app.use('/api/pickup', pickupRoutes);
+  app.use('/api/products', readRateLimiter, productsRoutes);
+  app.use('/api/categories', readRateLimiter, categoriesRoutes);
+  app.use('/api/cart', telegramAuthMiddleware, writeRateLimiter, cartRoutes);
+  app.use('/api/orders', telegramAuthMiddleware, writeRateLimiter, ordersRoutes);
+  app.use('/api/bonus', telegramAuthMiddleware, writeRateLimiter, bonusRoutes);
+  app.use('/api/users', telegramAuthMiddleware, writeRateLimiter, usersRoutes);
+  app.use('/api/pickup', telegramAuthMiddleware, writeRateLimiter, pickupRoutes);
+  app.use('/api/config', readRateLimiter, configRoutes);
 
-  // Обработка ошибок
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    const error = handleError(err);
-    logger.error('API Error:', { error, path: req.path, method: req.method });
-    res.status(error.statusCode).json({
-      success: false,
-      error: {
-        message: error.message,
-        ...(config.nodeEnv === 'development' && { stack: err.stack }),
-      },
+  // Serve frontend static build if present
+  const staticPath = path.resolve(__dirname, '../../frontend/dist');
+  if (fs.existsSync(staticPath)) {
+    app.use(express.static(staticPath));
+    app.get('*', (req, res, next) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/bot') ||
+        req.path.startsWith('/auth') ||
+        req.path.startsWith('/webhook')
+      ) {
+        return next();
+      }
+      return res.sendFile(path.join(staticPath, 'index.html'));
     });
-  });
+  }
 
-  // 404 handler
-  app.use((req: Request, res: Response) => {
-    res.status(404).json({
-      success: false,
-      error: {
-        message: 'Route not found',
-      },
-    });
-  });
+  // 404 + errors
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }

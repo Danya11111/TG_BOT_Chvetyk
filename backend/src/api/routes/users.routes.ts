@@ -1,24 +1,15 @@
-import { Router, Request, Response } from 'express';
-import { logger } from '../../utils/logger';
+import { Router } from 'express';
+import { usersController } from '../controllers/users.controller';
+import { asyncHandler } from '../middlewares/async-handler';
+import { validateRequest } from '../middlewares/validate-request';
+import { telegramIdParamSchema } from '../validation/common.schema';
 
 const router = Router();
 
-// GET /api/users/:telegramId - Получить информацию о пользователе
-router.get('/:telegramId', async (req: Request, res: Response) => {
-  try {
-    const { telegramId } = req.params;
-    // TODO: Реализация получения пользователя
-    res.status(404).json({
-      success: false,
-      error: { message: 'User not found' },
-    });
-  } catch (error) {
-    logger.error('Error fetching user:', error);
-    res.status(500).json({
-      success: false,
-      error: { message: 'Failed to fetch user' },
-    });
-  }
-});
+router.get(
+  '/:telegramId',
+  validateRequest(telegramIdParamSchema, 'params'),
+  asyncHandler(usersController.getByTelegramId.bind(usersController))
+);
 
 export default router;

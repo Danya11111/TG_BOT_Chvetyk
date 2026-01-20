@@ -1,5 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
 let redisClient: RedisClientType | null = null;
 
@@ -13,11 +14,11 @@ export async function getRedisClient(): Promise<RedisClientType> {
     });
 
     redisClient.on('error', (err) => {
-      console.error('Redis Client Error:', err);
+      logger.error('Redis Client Error:', err);
     });
 
     redisClient.on('connect', () => {
-      console.log('✅ Redis connection established');
+      logger.info('✅ Redis connection established');
     });
 
     await redisClient.connect();
@@ -49,7 +50,7 @@ export const cache = {
       const value = await client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
-      console.error('Redis GET error:', error);
+      logger.error('Redis GET error:', error);
       return null;
     }
   },
@@ -64,7 +65,7 @@ export const cache = {
         await client.set(key, stringValue);
       }
     } catch (error) {
-      console.error('Redis SET error:', error);
+      logger.error('Redis SET error:', error);
     }
   },
 
@@ -73,7 +74,7 @@ export const cache = {
       const client = await getRedisClient();
       await client.del(key);
     } catch (error) {
-      console.error('Redis DELETE error:', error);
+      logger.error('Redis DELETE error:', error);
     }
   },
 
@@ -85,7 +86,7 @@ export const cache = {
         await client.del(keys);
       }
     } catch (error) {
-      console.error('Redis CLEAR PATTERN error:', error);
+      logger.error('Redis CLEAR PATTERN error:', error);
     }
   },
 };

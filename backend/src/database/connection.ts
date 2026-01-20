@@ -1,5 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
 const poolConfig: PoolConfig = {
   host: config.database.host,
@@ -14,9 +15,12 @@ const poolConfig: PoolConfig = {
 
 export const pool = new Pool(poolConfig);
 
+// Экспорт db для удобства использования
+export const db = pool;
+
 // Обработка ошибок подключения
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error('Unexpected error on idle client', err);
   process.exit(-1);
 });
 
@@ -26,10 +30,10 @@ export async function testConnection(): Promise<boolean> {
     const client = await pool.connect();
     await client.query('SELECT NOW()');
     client.release();
-    console.log('✅ Database connection established');
+    logger.info('✅ Database connection established');
     return true;
   } catch (error) {
-    console.error('❌ Database connection failed:', error);
+    logger.error('❌ Database connection failed:', error);
     return false;
   }
 }

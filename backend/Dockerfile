@@ -1,19 +1,36 @@
-FROM node:20-alpine
+FROM node:20-slim AS frontend-build
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm install --no-audit --no-fund
+
+COPY frontend ./
+RUN npm install --no-audit --no-fund @rollup/rollup-linux-x64-gnu
+RUN npm run build
+
+FROM node:20-slim AS backend-build
+
+WORKDIR /app/backend
+
+COPY backend/package*.json ./
+RUN npm install --no-audit --no-fund
+
+COPY backend ./
+RUN npm run build
+
+FROM node:20-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
+ENV NODE_ENV=production
 
-# Copy source code
-COPY . .
+COPY --from=backend-build /app/backend/node_modules ./node_modules
+COPY --from=backend-build /app/backend/package*.json ./
+COPY --from=backend-build /app/backend/dist ./dist
+COPY --from=backend-build /app/backend/src/database/migrations ./dist/database/migrations
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Build TypeScript
-RUN npm run build
-
-# Expose port
 EXPOSE 3000
 
-# Start application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
