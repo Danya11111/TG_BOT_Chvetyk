@@ -1,15 +1,14 @@
 :root {
   /* --- Palette --- */
-  /* Brand: Elegant, Warm, Trustworthy */
-  /* A more sophisticated dusty pink/beige for primary brand elements */
-  --color-primary: #EBC8D3;         /* Dusty Rose */
-  --color-primary-dark: #D4A5B5;    /* Darker Rose */
-  --color-primary-light: #FDF4F7;   /* Very light rose background */
+  /* Brand: White & Gold */
+  --color-primary: #FFFFFF;
+  --color-primary-dark: #C9A33A;    /* Gold */
+  --color-primary-light: #FFF8E6;   /* Light gold */
   
-  /* Accent: High contrast, expensive dark tone */
-  --color-accent: #2A2428;          /* Warm Charcoal */
-  --color-accent-light: #4D454A;    
-  --color-accent-transparent: rgba(42, 36, 40, 0.05);
+  /* Accent */
+  --color-accent: #C9A33A;          /* Gold */
+  --color-accent-light: #D9B765;
+  --color-accent-transparent: rgba(201, 163, 58, 0.12);
 
   /* Functional Colors */
   --color-success: #32D74B;         /* iOS Green (Vibrant) */
@@ -19,18 +18,18 @@
   --color-black: #000000;
 
   /* Backgrounds */
-  --bg-main: #F9F9FB;     /* Very clean, almost white grey */
-  --bg-surface: #FFFFFF;  /* Cards */
-  --bg-secondary: #F2F2F7; /* Secondary elements */
-  --bg-input: #F2F2F7;    
-  --bg-glass: rgba(255, 255, 255, 0.85);
+  --bg-main: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-secondary: #FFF8E6;
+  --bg-input: #FFF8E6;
+  --bg-glass: rgba(255, 255, 255, 0.95);
 
   /* Text */
-  --text-primary: #1C1C1E;    /* Almost black */
-  --text-secondary: #8E8E93;  /* Standard iOS secondary */
-  --text-tertiary: #C7C7CC;   
+  --text-primary: #2B2412;
+  --text-secondary: #8C7A4F;
+  --text-tertiary: #C1B08A;
   --text-on-accent: #FFFFFF;
-  --text-price: #2A2428;      /* Strong color for price */
+  --text-price: #8A6B1F;
 
   /* --- Typography --- */
   --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -66,10 +65,10 @@
   --radius-full: 9999px;
 
   /* --- Effects --- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.06);
-  --shadow-float: 0 8px 32px rgba(42, 36, 40, 0.12);
+  --shadow-sm: 0 1px 4px rgba(201, 163, 58, 0.12);
+  --shadow-md: 0 6px 20px rgba(201, 163, 58, 0.16);
+  --shadow-lg: 0 12px 32px rgba(201, 163, 58, 0.2);
+  --shadow-float: 0 10px 36px rgba(201, 163, 58, 0.24);
   
   --backdrop-blur: blur(20px);
   

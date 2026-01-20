@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { resolveImageUrl } from '../utils/image';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -139,7 +140,7 @@ export default function CartPage() {
                 {/* Изображение товара */}
                 {item.image ? (
                   <img
-                    src={item.image}
+                    src={resolveImageUrl(item.image)}
                     alt={item.productName}
                     style={{
                       width: '80px',

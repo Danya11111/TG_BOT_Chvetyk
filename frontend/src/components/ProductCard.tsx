@@ -2,6 +2,7 @@ import React, { MouseEvent, useState, useEffect } from 'react';
 import { Product } from '../types/catalog';
 import './ProductCard.css';
 import WebApp from '@twa-dev/sdk';
+import { resolveImageUrl } from '../utils/image';
 
 interface ProductCardProps {
   product: Product;
@@ -32,7 +33,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, onAd
       <div className="product-card__image-container">
         {product.images && product.images.length > 0 ? (
           <img
-            src={product.images[0]}
+            src={resolveImageUrl(product.images[0])}
             alt={product.name}
             className="product-card__image"
             onError={(e) => {
