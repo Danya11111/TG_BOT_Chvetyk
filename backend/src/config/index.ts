@@ -55,6 +55,9 @@ export const config = {
     cron: process.env.SCRAPER_CRON || '0 * * * *', // ежечасно
     enabled: process.env.SCRAPER_ENABLED !== 'false',
     maxProducts: parseInt(process.env.SCRAPER_MAX_PRODUCTS || '500', 10),
+    sectionUrls: process.env.SCRAPER_SECTION_URLS
+      ? process.env.SCRAPER_SECTION_URLS.split(',').map((url) => url.trim()).filter(Boolean)
+      : [],
   },
   
   // Managers for notifications

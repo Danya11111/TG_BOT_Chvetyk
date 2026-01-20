@@ -118,38 +118,78 @@ async function parseProductPage(url: string): Promise<ScrapedProduct | null> {
   };
 }
 
-async function parseCategoryPage(url: string): Promise<{ products: string[]; category?: ScrapedCategory }> {
+interface CategoryParseResult {
+  products: string[];
+  pages: string[];
+  category?: ScrapedCategory;
+}
+
+async function parseCategoryPage(
+  url: string,
+  seedCategory?: ScrapedCategory
+): Promise<CategoryParseResult> {
   const html = await fetchHtml(url);
-  if (!html) return { products: [] };
+  if (!html) return { products: [], pages: [] };
 
   const $ = cheerio.load(html);
 
   const categoryName =
+    seedCategory?.name ||
     $('h1').first().text().trim() ||
     $('.page-title, .category-title').first().text().trim() ||
     $('title').text().trim();
 
-  const slug = categoryName ? slugify(categoryName) : undefined;
+  const slug = seedCategory?.slug || (categoryName ? slugify(categoryName) : undefined);
   const category: ScrapedCategory | undefined = categoryName
     ? {
         name: categoryName,
         slug: slug || '',
         url,
-        image: $('meta[property="og:image"]').attr('content') || undefined,
+        image: seedCategory?.image || $('meta[property="og:image"]').attr('content') || undefined,
       }
-    : undefined;
+    : seedCategory;
 
   const productLinks = new Set<string>();
-  $('a').each((_, el) => {
-    const href = $(el).attr('href');
-    if (!href) return;
-    const full = normalizeUrl(href.split('?')[0]);
-    if (isProbablyProductUrl(full)) {
-      productLinks.add(full);
-    }
+  const cardSelectors = [
+    '.product-item',
+    '.product-card',
+    '.catalog__item',
+    '.catalog-item',
+    '.item-product',
+    '.products__item',
+  ];
+
+  cardSelectors.forEach((selector) => {
+    $(selector).each((_, el) => {
+      const link = $(el).find('a[href]').first().attr('href');
+      if (!link) return;
+      const full = normalizeUrl(link.split('?')[0]);
+      if (isProbablyProductUrl(full)) {
+        productLinks.add(full);
+      }
+    });
   });
 
-  return { products: Array.from(productLinks), category };
+  if (productLinks.size === 0) {
+    $('a[href]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (!href) return;
+      const full = normalizeUrl(href.split('?')[0]);
+      if (isProbablyProductUrl(full)) {
+        productLinks.add(full);
+      }
+    });
+  }
+
+  const pageLinks = new Set<string>();
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href');
+    if (!href) return;
+    if (!/PAGEN_|page=|\/page\//i.test(href)) return;
+    pageLinks.add(normalizeUrl(href));
+  });
+
+  return { products: Array.from(productLinks), pages: Array.from(pageLinks), category };
 }
 
 async function fetchSitemapUrls(): Promise<string[]> {
@@ -165,36 +205,88 @@ export async function scrapeCatalog(): Promise<ScrapedCatalog> {
   const products: ScrapedProduct[] = [];
   const categories: ScrapedCategory[] = [];
 
-  const urlsFromSitemap = await fetchSitemapUrls();
-  const seedUrls = urlsFromSitemap.length ? urlsFromSitemap : [config.scraper.baseUrl];
+  const defaultSections: ScrapedCategory[] = [
+    { name: 'Собраны сегодня', slug: 'sobranyi-segodnya', url: normalizeUrl('/sobranyi-segodnya/') },
+    { name: 'Розы', slug: 'rozy', url: normalizeUrl('/rozy/') },
+    { name: 'Букеты', slug: 'bukety', url: normalizeUrl('/bukety/') },
+    { name: 'Свадьба', slug: 'svadba', url: normalizeUrl('/svadba/') },
+    { name: 'Композиции', slug: 'kompozicii', url: normalizeUrl('/kompozicii/') },
+    { name: 'Подарки', slug: 'podarki', url: normalizeUrl('/podarki/') },
+  ];
 
-  for (const url of seedUrls) {
+  const sectionSeeds =
+    config.scraper.sectionUrls && config.scraper.sectionUrls.length
+      ? config.scraper.sectionUrls.map((url) => ({ name: '', slug: '', url }))
+      : defaultSections;
+
+  for (const seed of sectionSeeds) {
     if (products.length >= config.scraper.maxProducts) break;
 
-    if (isProbablyProductUrl(url)) {
-      if (seenProducts.has(url)) continue;
-      const product = await parseProductPage(url);
-      if (product) {
-        seenProducts.add(url);
-        products.push(product);
-      }
-      continue;
-    }
+    const visitedPages = new Set<string>();
+    const pageQueue = [seed.url];
 
-    // treat as category/listing
-    const { products: links, category } = await parseCategoryPage(url);
-    if (category && !categories.find((c) => c.slug === category.slug)) {
-      categories.push(category);
+    while (pageQueue.length && products.length < config.scraper.maxProducts) {
+      const pageUrl = pageQueue.shift()!;
+      if (visitedPages.has(pageUrl)) continue;
+      visitedPages.add(pageUrl);
+
+      const { products: links, pages, category } = await parseCategoryPage(pageUrl, seed);
+      if (category && !categories.find((c) => c.slug === category.slug)) {
+        categories.push(category);
+      }
+
+      pages.forEach((page) => {
+        if (!visitedPages.has(page)) {
+          pageQueue.push(page);
+        }
+      });
+
+      for (const link of links) {
+        if (products.length >= config.scraper.maxProducts) break;
+        if (seenProducts.has(link)) continue;
+        const product = await parseProductPage(link);
+        if (product) {
+          seenProducts.add(link);
+          products.push(product);
+          if (category && !product.categorySlug) {
+            product.categorySlug = category.slug;
+          }
+        }
+      }
     }
-    for (const link of links) {
+  }
+
+  if (!products.length) {
+    const urlsFromSitemap = await fetchSitemapUrls();
+    const seedUrls = urlsFromSitemap.length ? urlsFromSitemap : [config.scraper.baseUrl];
+
+    for (const url of seedUrls) {
       if (products.length >= config.scraper.maxProducts) break;
-      if (seenProducts.has(link)) continue;
-      const product = await parseProductPage(link);
-      if (product) {
-        seenProducts.add(link);
-        products.push(product);
-        if (category && !product.categorySlug) {
-          product.categorySlug = category.slug;
+
+      if (isProbablyProductUrl(url)) {
+        if (seenProducts.has(url)) continue;
+        const product = await parseProductPage(url);
+        if (product) {
+          seenProducts.add(url);
+          products.push(product);
+        }
+        continue;
+      }
+
+      const { products: links, category } = await parseCategoryPage(url);
+      if (category && !categories.find((c) => c.slug === category.slug)) {
+        categories.push(category);
+      }
+      for (const link of links) {
+        if (products.length >= config.scraper.maxProducts) break;
+        if (seenProducts.has(link)) continue;
+        const product = await parseProductPage(link);
+        if (product) {
+          seenProducts.add(link);
+          products.push(product);
+          if (category && !product.categorySlug) {
+            product.categorySlug = category.slug;
+          }
         }
       }
     }
