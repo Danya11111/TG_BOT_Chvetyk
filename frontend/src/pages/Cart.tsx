@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { AppFooter } from '../components/AppFooter';
 import { resolveImageUrl } from '../utils/image';
 
 export default function CartPage() {
@@ -48,7 +49,7 @@ export default function CartPage() {
     <div style={{ 
       minHeight: '100vh', 
       backgroundColor: 'var(--bg-main)',
-      paddingBottom: '100px'
+      paddingBottom: '120px'
     }}>
       {/* Заголовок с кнопкой назад */}
       <div style={{
@@ -312,6 +313,14 @@ export default function CartPage() {
             </div>
           </div>
 
+          <button
+            onClick={() => navigate('/checkout', { replace: false })}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '14px', marginBottom: '12px' }}
+          >
+            Оформить заказ
+          </button>
+
           {/* Кнопка очистки корзины */}
           <button
             onClick={() => {
@@ -334,6 +343,7 @@ export default function CartPage() {
       )}
       </div>
 
+      <AppFooter />
       <BottomNavigation />
     </div>
   );

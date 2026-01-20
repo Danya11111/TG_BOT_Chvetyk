@@ -4,6 +4,7 @@ import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { useProductStore } from '../store/product.store';
 import { Button } from '../components/ui/Button';
+import { resolveImageUrl } from '../utils/image';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +97,7 @@ export default function ProductPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: 'var(--background-color)',
+      backgroundColor: 'var(--bg-main)',
       paddingBottom: '20px'
     }} className="fade-in">
       
@@ -134,13 +135,13 @@ export default function ProductPage() {
       <div style={{ 
         width: '100%',
         aspectRatio: '1',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         marginTop: '-64px', /* Pull up behind header */
         zIndex: 1
       }}>
         {product.images && product.images.length > 0 ? (
           <img
-            src={product.images[0]}
+            src={resolveImageUrl(product.images[0])}
             alt={product.name}
             style={{
               width: '100%',
@@ -170,7 +171,7 @@ export default function ProductPage() {
         marginTop: '-20px',
         borderTopLeftRadius: '24px',
         borderTopRightRadius: '24px',
-        backgroundColor: 'var(--background-color)',
+        backgroundColor: 'var(--bg-main)',
         padding: '24px 16px',
         zIndex: 2,
         boxShadow: '0 -10px 20px rgba(0,0,0,0.05)'

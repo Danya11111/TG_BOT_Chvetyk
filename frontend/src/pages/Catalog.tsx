@@ -6,6 +6,7 @@ import { useCatalogStore } from '../store/catalog.store';
 import { Product } from '../types/catalog';
 import { ProductCard } from '../components/ProductCard';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { AppFooter } from '../components/AppFooter';
 import clsx from 'clsx';
 import './Catalog.css';
 
@@ -106,7 +107,7 @@ export default function CatalogPage() {
   }
 
   return (
-    <div className="catalog-page">
+    <div className="catalog-page" style={{ paddingBottom: '120px' }}>
       {/* Header / Search */}
       <div className="catalog-header">
         <div className="search-wrapper">
@@ -230,6 +231,7 @@ export default function CatalogPage() {
         </div>
       )}
 
+      <AppFooter />
       <BottomNavigation />
     </div>
   );
