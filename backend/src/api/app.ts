@@ -17,6 +17,7 @@ import ordersRoutes from './routes/orders.routes';
 import bonusRoutes from './routes/bonus.routes';
 import usersRoutes from './routes/users.routes';
 import pickupRoutes from './routes/pickup.routes';
+import configRoutes from './routes/config.routes';
 import { telegramAuthMiddleware } from './middlewares/telegram-auth';
 import { readRateLimiter, writeRateLimiter } from './middlewares/rate-limit';
 
@@ -88,6 +89,7 @@ export function createApp(): Express {
   app.use('/api/bonus', telegramAuthMiddleware, writeRateLimiter, bonusRoutes);
   app.use('/api/users', telegramAuthMiddleware, writeRateLimiter, usersRoutes);
   app.use('/api/pickup', telegramAuthMiddleware, writeRateLimiter, pickupRoutes);
+  app.use('/api/config', readRateLimiter, configRoutes);
 
   // Serve frontend static build if present
   const staticPath = path.resolve(__dirname, '../../frontend/dist');

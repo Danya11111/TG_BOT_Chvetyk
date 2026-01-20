@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { customerData } from './customer-data';
 
 dotenv.config();
 
@@ -61,6 +62,12 @@ export const config = {
     telegramIds: process.env.MANAGER_TELEGRAM_IDS 
       ? process.env.MANAGER_TELEGRAM_IDS.split(',').map(id => id.trim())
       : [],
+    groupChatId: customerData.managerGroupChatId,
+  },
+
+  // Support contacts
+  support: {
+    managerPhone: customerData.managerPhone,
   },
   
   // CORS
@@ -73,6 +80,10 @@ export const config = {
       /\.ngrok\.io$/,
     ],
     credentials: true,
+  },
+
+  migrations: {
+    enabled: process.env.RUN_MIGRATIONS !== 'false',
   },
 };
 

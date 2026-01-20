@@ -28,6 +28,7 @@ ENV NODE_ENV=production
 COPY --from=backend-build /app/backend/node_modules ./node_modules
 COPY --from=backend-build /app/backend/package*.json ./
 COPY --from=backend-build /app/backend/dist ./dist
+COPY --from=backend-build /app/backend/src/database/migrations ./dist/database/migrations
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000

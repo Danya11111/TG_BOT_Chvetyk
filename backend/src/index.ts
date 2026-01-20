@@ -2,6 +2,7 @@ import { createApp } from './api/app';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { testConnection } from './database/connection';
+import { runMigrations } from './database/migrate';
 import { startBot } from './bot/bot';
 import { startScraperScheduler } from './scraper/scheduler';
 
@@ -12,6 +13,11 @@ async function startServer(): Promise<void> {
     const dbConnected = await testConnection();
     if (!dbConnected) {
       logger.warn('Database connection failed, but continuing...');
+    }
+
+    if (config.migrations.enabled) {
+      logger.info('Running database migrations...');
+      await runMigrations();
     }
 
     // Запуск API сервера

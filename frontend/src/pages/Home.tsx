@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { config } = useCustomerConfig();
 
   useEffect(() => {
     // Настройка кнопки в Telegram
@@ -19,10 +21,17 @@ export default function HomePage() {
   return (
     <div className="container" style={{ paddingTop: '20px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <img src="/brand-logo.png" alt="Flowers Studio" style={{ width: '160px', maxWidth: '70%' }} />
-        <h1 style={{ margin: 0, textAlign: 'center' }}>🌺 Говорящие цветы</h1>
+        <img
+          src="/brand-logo.png"
+          alt={config?.brand?.displayName || 'Flowers Studio'}
+          style={{ width: '160px', maxWidth: '70%' }}
+        />
+        <h1 style={{ margin: 0, textAlign: 'center' }}>
+          🌺 {config?.brand?.displayName || 'Говорящие цветы'}
+        </h1>
         <p style={{ margin: 0, textAlign: 'center', color: '#6C757D' }}>
-          Заказ букетов в Чебоксарах через Telegram (FlowersStudioBot)
+          {(config?.brand?.tagline || 'Заказ букетов в Чебоксарах через Telegram') +
+            ` (${config?.brand?.botName || 'FlowersStudioBot'})`}
         </p>
       </div>
       

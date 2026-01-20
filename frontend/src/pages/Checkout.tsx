@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { useCheckoutStore, CheckoutFormData, DeliveryAddress } from '../store/checkout.store';
+import { createOrder, getOrderStatus } from '../api/orders.api';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -10,6 +12,11 @@ export default function CheckoutPage() {
   const { formData: savedFormData, saveFormData, clearFormData } = useCheckoutStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'confirmed' | 'rejected'>('idle');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const { config: customerConfig } = useCustomerConfig();
 
   // Загружаем сохраненные данные или используем значения по умолчанию
   const getInitialFormData = (): CheckoutFormData => {
@@ -37,7 +44,7 @@ export default function CheckoutPage() {
       recipientPhone: '',
       cardText: '',
       comment: '',
-      paymentType: 'cash',
+      paymentType: 'card_requisites',
     };
   };
 
@@ -95,56 +102,115 @@ export default function CheckoutPage() {
     return Object.keys(newErrors).length === 0;
   }, [formData]);
 
-  const handleSubmit = useCallback(async () => {
+  const handlePaymentCompleted = useCallback(async () => {
     const isValid = validateForm();
     if (!isValid) {
       WebApp.showAlert('Пожалуйста, заполните все обязательные поля');
       return;
     }
 
+    if (formData.paymentType !== 'card_requisites') {
+      WebApp.showAlert('Выберите оплату по реквизитам карты');
+      return;
+    }
+
+    if (orderId) {
+      return;
+    }
+
     setLoading(true);
+    setStatusMessage(null);
 
     try {
-      // TODO: Отправка заказа на backend после интеграции с Posiflora
-      // Пока просто показываем успешное сообщение
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Имитация запроса
-      
-      WebApp.showAlert('Заказ успешно оформлен! Мы свяжемся с вами в ближайшее время.');
-      
-      // Очистка корзины и данных формы, переход на главную
+      const createdOrder = await createOrder(formData, items);
+
+      setOrderId(createdOrder.id);
+      setOrderNumber(createdOrder.orderNumber);
+      setPaymentStatus('processing');
+      setStatusMessage('Платеж обрабатывается');
+
       clearCart();
       clearFormData();
-      navigate('/');
     } catch (error) {
       console.error('Error creating order:', error);
       WebApp.showAlert('Произошла ошибка при оформлении заказа. Попробуйте позже.');
     } finally {
       setLoading(false);
     }
-  }, [formData, validateForm, clearCart, clearFormData, navigate]);
+  }, [formData, validateForm, orderId, clearCart, clearFormData, items]);
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !orderId) {
       navigate('/cart', { replace: false });
+    }
+  }, [items.length, orderId, navigate]);
+
+  useEffect(() => {
+    WebApp.MainButton.hide();
+  }, []);
+
+  useEffect(() => {
+    if (!customerConfig?.delivery?.city || orderId) {
+      return;
+    }
+    if (formData.address.city && formData.address.city !== 'Чебоксары') {
+      return;
+    }
+    if (formData.address.city === customerConfig.delivery.city) {
+      return;
+    }
+    const updatedData = {
+      ...formData,
+      address: {
+        ...formData.address,
+        city: customerConfig.delivery.city,
+      },
+    };
+    setFormData(updatedData);
+    saveFormData(updatedData);
+  }, [customerConfig?.delivery?.city, orderId, formData, saveFormData]);
+
+
+  useEffect(() => {
+    if (!orderId || paymentStatus !== 'processing') {
       return;
     }
 
-    const total = getTotal();
-    WebApp.MainButton.setText(`Оформить заказ - ${total.toLocaleString('ru-RU')} ₽`);
-    WebApp.MainButton.show();
-    
-    const handleClick = () => {
-      handleSubmit();
+    let isActive = true;
+
+    const fetchStatus = async () => {
+      try {
+        const status = await getOrderStatus(orderId);
+        if (!isActive) {
+          return;
+        }
+        if (status.paymentStatus === 'confirmed') {
+          setPaymentStatus('confirmed');
+          setStatusMessage('Заказ успешно оплачен');
+        } else if (status.paymentStatus === 'rejected') {
+          setPaymentStatus('rejected');
+          setStatusMessage('Оплата не прошла');
+        } else {
+          setStatusMessage('Платеж обрабатывается');
+        }
+      } catch (error) {
+        console.error('Error fetching order status:', error);
+      }
     };
-    WebApp.MainButton.onClick(handleClick);
+
+    fetchStatus();
+    const intervalId = window.setInterval(fetchStatus, 8000);
 
     return () => {
-      WebApp.MainButton.hide();
+      isActive = false;
+      window.clearInterval(intervalId);
     };
-  }, [items.length, getTotal, handleSubmit, navigate]);
+  }, [orderId, paymentStatus]);
 
   const handleInputChange = (field: keyof CheckoutFormData, value: any) => {
+    if (orderId) {
+      return;
+    }
     const updatedData = {
       ...formData,
       [field]: value,
@@ -163,6 +229,9 @@ export default function CheckoutPage() {
   };
 
   const handleAddressChange = (field: keyof DeliveryAddress, value: string) => {
+    if (orderId) {
+      return;
+    }
     const updatedData = {
       ...formData,
       address: {
@@ -182,7 +251,20 @@ export default function CheckoutPage() {
     }
   };
 
-  if (items.length === 0) {
+  const isOrderLocked = orderId !== null;
+  const sbpEnabled = Boolean(customerConfig?.sbpQr?.enabled);
+  const sbpLabel = sbpEnabled
+    ? 'Оплата по QR-коду СБП'
+    : `Оплата по QR-коду СБП (${customerConfig?.sbpQr?.note || 'скоро'})`;
+  const paymentOptions = [
+    { value: 'card_requisites', label: 'Оплата по реквизитам карты', icon: '💳', disabled: false },
+    { value: 'sbp_qr', label: sbpLabel, icon: '📱', disabled: !sbpEnabled },
+  ] as const;
+  const deliveryZonesText = customerConfig?.delivery?.zones
+    ?.map((zone) => `${zone.name} — ${zone.price}`)
+    .join('; ');
+
+  if (items.length === 0 && !orderId) {
     return null;
   }
 
@@ -482,9 +564,14 @@ export default function CheckoutPage() {
         
         <div style={{ marginTop: '16px', backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '12px', border: '1px solid #FFCADC', color: '#2D1B2E', fontSize: '14px', lineHeight: 1.5 }}>
           <div style={{ fontWeight: 600, marginBottom: '6px' }}>Условия доставки</div>
-          <div>• Чебоксары — бесплатно; Новый город — 300 ₽; Новочебоксарск, Кугеси, Лапсары — 400 ₽; другие районы — по договоренности.</div>
-          <div>• Время работы доставки: 09:00–21:00 (после 21:00 +500 ₽, согласуем заранее).</div>
-          <div>• Среднее время доставки: 1–2 часа.</div>
+          <div>• {deliveryZonesText || 'Тарифы будут добавлены позже.'}</div>
+          <div>
+            • Время работы доставки: {customerConfig?.delivery?.workingHours || '09:00–21:00'}
+            {customerConfig?.delivery?.afterHoursFee
+              ? ` (после ${customerConfig.delivery.afterHoursStart || '21:00'} +${customerConfig.delivery.afterHoursFee}, согласуем заранее).`
+              : '.'}
+          </div>
+          <div>• Среднее время доставки: {customerConfig?.delivery?.avgTime || '1–2 часа'}.</div>
         </div>
       </div>
 
@@ -658,39 +745,101 @@ export default function CheckoutPage() {
           Способ оплаты
         </h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {[
-            { value: 'cash', label: 'Наличными при получении', icon: '💵' },
-            { value: 'vtb_token', label: 'Оплата токеном ВТБ', icon: '💳' },
-          ].map((payment) => (
-            <label
-              key={payment.value}
+        {!isOrderLocked && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {paymentOptions.map((payment) => (
+              <label
+                key={payment.value}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: formData.paymentType === payment.value ? '2px solid #FF6B9D' : '1px solid #DEE2E6',
+                  cursor: payment.disabled ? 'not-allowed' : 'pointer',
+                  opacity: payment.disabled ? 0.6 : 1,
+                  backgroundColor: formData.paymentType === payment.value ? '#FFF0F5' : '#FFFFFF'
+                }}
+              >
+                <input
+                  type="radio"
+                  name="paymentType"
+                  value={payment.value}
+                  checked={formData.paymentType === payment.value}
+                  disabled={payment.disabled || isOrderLocked}
+                  onChange={(e) => handleInputChange('paymentType', e.target.value)}
+                  style={{ marginRight: '12px', width: '20px', height: '20px' }}
+                />
+                <span style={{ marginRight: '8px', fontSize: '20px' }}>{payment.icon}</span>
+                <span style={{ fontWeight: '500', color: '#2D1B2E' }}>{payment.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {formData.paymentType === 'card_requisites' && !isOrderLocked && (
+          <div style={{
+            marginTop: '16px',
+            backgroundColor: '#FFF0F5',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid #FFCADC'
+          }}>
+            <div style={{ fontWeight: 600, color: '#2D1B2E', marginBottom: '8px' }}>
+              {customerConfig?.cardRequisites.title || 'Оплата по реквизитам карты'}
+            </div>
+            <div style={{ fontSize: '14px', color: '#2D1B2E', lineHeight: 1.5 }}>
+              {customerConfig?.cardRequisites.details?.length
+                ? customerConfig.cardRequisites.details.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))
+                : <div>Реквизиты будут добавлены позже.</div>}
+            </div>
+            <div style={{ marginTop: '8px', fontSize: '13px', color: '#6C757D' }}>
+              {customerConfig?.cardRequisites.note || 'После оплаты нажмите кнопку ниже.'}
+            </div>
+            <button
+              onClick={handlePaymentCompleted}
+              disabled={loading || orderId !== null}
               style={{
-                display: 'flex',
-                alignItems: 'center',
+                marginTop: '12px',
+                width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: formData.paymentType === payment.value ? '2px solid #FF6B9D' : '1px solid #DEE2E6',
-                cursor: 'pointer',
-                backgroundColor: formData.paymentType === payment.value ? '#FFF0F5' : '#FFFFFF'
+                border: 'none',
+                backgroundColor: loading || orderId !== null ? '#DEE2E6' : '#FF6B9D',
+                color: '#FFFFFF',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: loading || orderId !== null ? 'not-allowed' : 'pointer'
               }}
             >
-              <input
-                type="radio"
-                name="paymentType"
-                value={payment.value}
-                checked={formData.paymentType === payment.value}
-                onChange={(e) => handleInputChange('paymentType', e.target.value)}
-                style={{ marginRight: '12px', width: '20px', height: '20px' }}
-              />
-              <span style={{ marginRight: '8px', fontSize: '20px' }}>{payment.icon}</span>
-              <span style={{ fontWeight: '500', color: '#2D1B2E' }}>{payment.label}</span>
-            </label>
-          ))}
-        </div>
-        <p style={{ marginTop: '10px', fontSize: '13px', color: '#6C757D' }}>
-          Онлайн-оплату по токену ВТБ подтвердим и проведём после оформления заказа.
-        </p>
+              {loading ? 'Отправляем...' : 'Оплата завершена'}
+            </button>
+          </div>
+        )}
+
+        {orderId && (
+          <div style={{
+            marginTop: '16px',
+            backgroundColor: '#F8F9FA',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid #DEE2E6'
+          }}>
+            <div style={{ fontWeight: 600, color: '#2D1B2E', marginBottom: '6px' }}>
+              {orderNumber ? `Заказ #${orderNumber}` : 'Заказ отправлен'}
+            </div>
+            <div style={{ fontSize: '14px', color: '#2D1B2E' }}>
+              {statusMessage || 'Платеж обрабатывается'}
+            </div>
+            {paymentStatus === 'rejected' && (
+              <div style={{ marginTop: '8px', fontSize: '13px', color: '#6C757D' }}>
+                Если оплата была проведена, свяжитесь с менеджером: {customerConfig?.managerPhone || '+7 900 000-00-00'}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Комментарий */}

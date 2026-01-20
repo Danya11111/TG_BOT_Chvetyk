@@ -1,7 +1,18 @@
 import { Context } from 'telegraf';
 import { config } from '../../config';
+import { customerData } from '../../config/customer-data';
 import { db } from '../../database/connection';
 import { logger } from '../../utils/logger';
+
+const formatMessage = (lines: string[], placeholders: Record<string, string>) =>
+  lines
+    .map((line) =>
+      Object.keys(placeholders).reduce(
+        (result, key) => result.replaceAll(`{${key}}`, placeholders[key]),
+        line
+      )
+    )
+    .join('\n');
 
 export async function handleStart(ctx: Context): Promise<void> {
   const user = ctx.from;
@@ -27,15 +38,10 @@ export async function handleStart(ctx: Context): Promise<void> {
 
     if (isNewUser) {
       // Первое сообщение при открытии бота (как на картинке 2)
-      const firstMessage = 
-        `Что может делать этот бот?\n\n` +
-        `Здравствуй! Добро пожаловать в Цветочный №21! 🌱\n\n` +
-        `Мы известны своей заботой о клиентах и розами по себестоимости.\n\n` +
-        `У нас всё честно и искренне - красивые букеты в бесплатной коробке, с подкормкой и открыткой ❤️\n\n` +
-        `Оформи заказ через Mini App в боте — мы доставим цветы в Чебоксары и Новочебоксарск.\n\n` +
-        `Если возникнут вопросы, менеджер на связи с 8:00 до 24:00 🧑‍💻\n\n` +
-        `Подписывайся на наш Telegram-канал, чтобы первым узнавать о новинках и предложениях: @cvetochniy21\n\n` +
-        `Чтобы заказать нажми «СТАРТ» 👇`;
+      const firstMessage = formatMessage(customerData.botMessages.newUserIntro, {
+        name: firstName,
+        phone: customerData.contacts.phone,
+      });
 
       logger.info(`Sending first message to new user ${userId}`);
       await ctx.reply(firstMessage, {
@@ -56,10 +62,10 @@ export async function handleStart(ctx: Context): Promise<void> {
       logger.info(`User ${userId} saved to database`);
     } else {
       // Сообщение после нажатия /start (как на картинке 3, но с кнопкой "Открыть каталог")
-      const welcomeMessage = 
-        `Здравствуйте, ${firstName} и добро пожаловать в Цветочный №21! 🌿\n\n` +
-        `Мы рады предложить вам разнообразные букеты, наполненные свежестью и ароматом, а также стильные композиции, которые добавят ярких красок в любое ваше событие! 🎉\n\n` +
-        `Нажмите на кнопку ниже, и наш менеджер с радостью поможет вам выбрать идеальный букет или примет ваш заказ. Мы готовы сделать ваш день особенным! 💖`;
+      const welcomeMessage = formatMessage(customerData.botMessages.existingUserWelcome, {
+        name: firstName,
+        phone: customerData.contacts.phone,
+      });
 
       logger.info(`Sending welcome message to existing user ${userId}`);
       
@@ -97,10 +103,10 @@ export async function handleStart(ctx: Context): Promise<void> {
   } catch (error) {
     logger.error('Error in handleStart:', error);
     // В случае ошибки показываем стандартное сообщение
-    const welcomeMessage = 
-      `Здравствуйте, ${firstName} и добро пожаловать в Цветочный №21! 🌿\n\n` +
-      `Мы рады предложить вам разнообразные букеты, наполненные свежестью и ароматом, а также стильные композиции, которые добавят ярких красок в любое ваше событие! 🎉\n\n` +
-      `Нажмите на кнопку ниже, и наш менеджер с радостью поможет вам выбрать идеальный букет или примет ваш заказ. Мы готовы сделать ваш день особенным! 💖`;
+    const welcomeMessage = formatMessage(customerData.botMessages.existingUserWelcome, {
+      name: firstName,
+      phone: customerData.contacts.phone,
+    });
 
     try {
       // Проверяем, является ли URL HTTPS

@@ -22,7 +22,7 @@ export interface CheckoutFormData {
   recipientPhone?: string;
   cardText?: string;
   comment: string;
-  paymentType: 'cash' | 'vtb_token';
+  paymentType: 'card_requisites' | 'sbp_qr';
 }
 
 interface CheckoutStore {

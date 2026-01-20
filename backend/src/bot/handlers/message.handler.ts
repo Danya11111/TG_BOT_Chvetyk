@@ -1,7 +1,18 @@
 import { Context } from 'telegraf';
 import { config } from '../../config';
+import { customerData } from '../../config/customer-data';
 import { handleMenu } from '../commands/menu';
 import { db } from '../../database/connection';
+
+const formatMessage = (lines: string[], placeholders: Record<string, string>) =>
+  lines
+    .map((line) =>
+      Object.keys(placeholders).reduce(
+        (result, key) => result.replaceAll(`{${key}}`, placeholders[key]),
+        line
+      )
+    )
+    .join('\n');
 
 export async function handleMessage(ctx: Context): Promise<void> {
   const message = (ctx.message as any)?.text;
@@ -39,17 +50,19 @@ export async function handleMessage(ctx: Context): Promise<void> {
 
     case 'ℹ️ О нас':
       await ctx.reply(
-        'Информация о компании будет добавлена позже.\n\n' +
-        'Вы можете перейти на наш сайт или связаться с нами для получения дополнительной информации.'
+        formatMessage(customerData.botMessages.aboutShort, {
+          name: user?.first_name || '',
+          phone: customerData.contacts.phone,
+        })
       );
       break;
 
     case '❓ Помощь':
       await ctx.reply(
-        'Если у вас возникли вопросы, вы можете:\n\n' +
-        '• Использовать кнопку "Открыть каталог" для просмотра товаров\n' +
-        '• Написать нам в поддержку\n' +
-        '• Позвонить по телефону (номер будет добавлен позже)'
+        formatMessage(customerData.botMessages.help, {
+          name: user?.first_name || '',
+          phone: customerData.contacts.phone,
+        })
       );
       break;
 
@@ -64,15 +77,10 @@ export async function handleMessage(ctx: Context): Promise<void> {
 
         if (existingUser.rows.length === 0) {
           // Новый пользователь - показываем первое приветственное сообщение
-          const firstMessage = 
-            `Что может делать этот бот?\n\n` +
-            `Здравствуй! Добро пожаловать в Цветочный №21! 🌱\n\n` +
-            `Мы известны своей заботой о клиентах и розами по себестоимости.\n\n` +
-            `У нас всё честно и искренне - красивые букеты в бесплатной коробке, с подкормкой и открыткой ❤️\n\n` +
-            `Оформи заказ через Mini App в боте — мы доставим цветы в Чебоксары и Новочебоксарск.\n\n` +
-            `Если возникнут вопросы, менеджер на связи с 8:00 до 24:00 🧑‍💻\n\n` +
-            `Подписывайся на наш Telegram-канал, чтобы первым узнавать о новинках и предложениях: @cvetochniy21\n\n` +
-            `Чтобы заказать нажми «СТАРТ» 👇`;
+          const firstMessage = formatMessage(customerData.botMessages.newUserIntro, {
+            name: user.first_name || '',
+            phone: customerData.contacts.phone,
+          });
 
           await ctx.reply(firstMessage, {
             reply_markup: {

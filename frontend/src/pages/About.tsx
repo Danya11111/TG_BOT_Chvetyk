@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 
 export default function AboutPage() {
   const navigate = useNavigate();
+  const { config } = useCustomerConfig();
 
   useEffect(() => {
     WebApp.MainButton.hide();
@@ -66,33 +68,43 @@ export default function AboutPage() {
         marginBottom: '20px'
       }}>
         <h2 style={{ margin: '0 0 12px', fontSize: '18px', color: '#2D1B2E' }}>
-          Говорящие цветы
+          {config?.brand?.displayName || 'Говорящие цветы'}
         </h2>
         <p style={{ marginBottom: '10px', lineHeight: '1.6', color: '#495057' }}>
-          Цветочный сервис в Чебоксарах. Собираем букеты с 09:00 до 21:00 и доставляем в течение 1–2 часов по городу и ближайшим районам.
+          Цветочный сервис в {config?.delivery?.city || 'Чебоксарах'}. Собираем букеты с {config?.delivery?.workingHours || '09:00–21:00'} и доставляем в течение {config?.delivery?.avgTime || '1–2 часов'} по городу и ближайшим районам.
         </p>
         <p style={{ margin: 0, color: '#2D1B2E', fontWeight: 500 }}>
-          Оформляйте заказы в боте FlowersStudioBot — отвечаем быстро.
+          Оформляйте заказы в боте {config?.brand?.botName || 'FlowersStudioBot'} — отвечаем быстро.
         </p>
       </div>
 
       <div style={{ marginTop: '24px' }}>
         <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Контакты</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: '#2D1B2E', fontSize: '14px' }}>
-          <div><strong>Телефон:</strong> <a href="tel:+79603068713" style={{ color: '#2D1B2E' }}>8-960-306-87-13</a></div>
-          <div><strong>Email:</strong> <a href="mailto:flowers-cheb2014@yandex.ru" style={{ color: '#2D1B2E' }}>flowers-cheb2014@yandex.ru</a></div>
-          <div><strong>Адрес:</strong> г. Чебоксары, ул. Университетская, 38/3</div>
-          <div><strong>График:</strong> ежедневно 09:00–21:00</div>
+          <div><strong>Телефон:</strong> <a href={`tel:${config?.contacts?.phone || '+79603068713'}`} style={{ color: '#2D1B2E' }}>{config?.contacts?.phone || '8-960-306-87-13'}</a></div>
+          <div><strong>Email:</strong> <a href={`mailto:${config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}`} style={{ color: '#2D1B2E' }}>{config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}</a></div>
+          <div><strong>Адрес:</strong> {config?.contacts?.address || 'г. Чебоксары, ул. Университетская, 38/3'}</div>
+          <div><strong>График:</strong> {config?.contacts?.workHours || 'ежедневно 09:00–21:00'}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
             <span style={{ fontWeight: 600 }}>Социальные сети:</span>
-            <a href="https://t.me/flowerscheb" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Telegram: @flowerscheb</a>
-            <a href="https://www.instagram.com/tf_flowers_21" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Instagram: @tf_flowers_21</a>
-            <a href="https://vk.com/torgflowers" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>VK: vk.com/torgflowers</a>
+            {config?.contacts?.social?.telegram && (
+              <a href={config.contacts.social.telegram} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Telegram</a>
+            )}
+            {config?.contacts?.social?.instagram && (
+              <a href={config.contacts.social.instagram} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Instagram</a>
+            )}
+            {config?.contacts?.social?.vk && (
+              <a href={config.contacts.social.vk} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>VK</a>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
             <span style={{ fontWeight: 600 }}>Ссылки:</span>
-            <a href="https://cvety-cheboksary.ru" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Официальный сайт</a>
-            <a href="https://yandex.ru/profile/47796378484?lang=ru" target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Яндекс.Карты</a>
+            {config?.contacts?.links?.site && (
+              <a href={config.contacts.links.site} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Официальный сайт</a>
+            )}
+            {config?.contacts?.links?.yandexMaps && (
+              <a href={config.contacts.links.yandexMaps} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Яндекс.Карты</a>
+            )}
           </div>
         </div>
       </div>
@@ -100,20 +112,27 @@ export default function AboutPage() {
       <div style={{ marginTop: '24px' }}>
         <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Доставка</h2>
         <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '16px', border: '1px solid #FFCADC' }}>
-          <div style={{ marginBottom: '8px', fontWeight: 600, color: '#2D1B2E' }}>Стоимость по зонам (09:00–21:00):</div>
+          <div style={{ marginBottom: '8px', fontWeight: 600, color: '#2D1B2E' }}>
+            Стоимость по зонам ({config?.delivery?.workingHours || '09:00–21:00'}):
+          </div>
           <ul style={{ margin: '0 0 12px 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
-            <li>Чебоксары — бесплатно</li>
-            <li>Новый город — 300 ₽</li>
-            <li>Новочебоксарск — 400 ₽</li>
-            <li>Кугеси — 400 ₽</li>
-            <li>Лапсары — 400 ₽</li>
-            <li>Другие районы — по договоренности с менеджером</li>
+            {(config?.delivery?.zones || [
+              { name: 'Чебоксары', price: 'бесплатно' },
+              { name: 'Новый город', price: '300 ₽' },
+              { name: 'Новочебоксарск', price: '400 ₽' },
+              { name: 'Кугеси', price: '400 ₽' },
+              { name: 'Лапсары', price: '400 ₽' },
+              { name: 'Другие районы', price: 'по договоренности с менеджером' },
+            ]).map((zone) => (
+              <li key={`${zone.name}-${zone.price}`}>{zone.name} — {zone.price}</li>
+            ))}
           </ul>
           <div style={{ color: '#495057', fontSize: '14px' }}>
-            • Доставляем с 09:00 до 21:00 (после 21:00 +500 ₽, согласовываем заранее).<br/>
-            • Среднее время доставки: 1–2 часа.<br/>
-            • Заказы на ночь оформляйте с 09:00 до 21:00.<br/>
-            • Минимальной суммы заказа нет.
+            • Доставляем с {config?.delivery?.workingHours || '09:00–21:00'} (после {config?.delivery?.afterHoursStart || '21:00'} +{config?.delivery?.afterHoursFee || '500 ₽'}, согласовываем заранее).<br/>
+            • Среднее время доставки: {config?.delivery?.avgTime || '1–2 часа'}.<br/>
+            {(config?.delivery?.notes || ['Заказы на ночь оформляйте с 09:00 до 21:00.', 'Минимальной суммы заказа нет.']).map((note) => (
+              <span key={note}>• {note}<br/></span>
+            ))}
           </div>
         </div>
       </div>
@@ -121,10 +140,10 @@ export default function AboutPage() {
       <div style={{ marginTop: '24px' }}>
         <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Самовывоз</h2>
         <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '16px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
-          <div style={{ marginBottom: '8px' }}><strong>Адрес:</strong> ул. Университетская, 38 к. 3, Чебоксары, 428034</div>
-          <div style={{ marginBottom: '8px' }}><strong>Время работы точки:</strong> 09:00–21:00</div>
+          <div style={{ marginBottom: '8px' }}><strong>Адрес:</strong> {config?.pickup?.address || 'ул. Университетская, 38 к. 3, Чебоксары, 428034'}</div>
+          <div style={{ marginBottom: '8px' }}><strong>Время работы точки:</strong> {config?.pickup?.hours || '09:00–21:00'}</div>
           <div style={{ color: '#495057', fontSize: '14px' }}>
-            Подробные инструкции по самовывозу уточняются — менеджер напишет после оформления заказа.
+            {config?.pickup?.note || 'Подробные инструкции по самовывозу уточняются — менеджер напишет после оформления заказа.'}
           </div>
         </div>
       </div>
@@ -133,21 +152,29 @@ export default function AboutPage() {
         <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Бонусы и оплата</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '14px', border: '1px solid #FFCADC', color: '#2D1B2E' }}>
-            <div style={{ fontWeight: 600, marginBottom: '6px' }}>Бонусная программа</div>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.bonuses?.title || 'Бонусная программа'}</div>
             <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
-              <li>Начисляем 5% от суммы заказа.</li>
-              <li>Начисление не распространяется на оплату доставки.</li>
-              <li>Списание до 10% от суммы заказа (не действует на акции).</li>
-              <li>Списывать можно только на товары, доставку бонусами не оплачиваем.</li>
-              <li>Минимальной суммы для начисления/списания нет.</li>
-              <li>Округляем начисление вверх до целого рубля.</li>
+              {(config?.bonuses?.rules || [
+                'Начисляем 5% от суммы заказа.',
+                'Начисление не распространяется на оплату доставки.',
+                'Списание до 10% от суммы заказа (не действует на акции).',
+                'Списывать можно только на товары, доставку бонусами не оплачиваем.',
+                'Минимальной суммы для начисления/списания нет.',
+                'Округляем начисление вверх до целого рубля.',
+              ]).map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
             </ul>
           </div>
           <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '14px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
-            <div style={{ fontWeight: 600, marginBottom: '6px' }}>Способы оплаты</div>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.payments?.title || 'Способы оплаты'}</div>
             <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
-              <li>Наличные при получении.</li>
-              <li>Токен от ВТБ (онлайн-оплата по токену).</li>
+              {(config?.payments?.methods || [
+                'Наличные при получении.',
+                'Оплата по реквизитам карты.',
+              ]).map((method) => (
+                <li key={method}>{method}</li>
+              ))}
             </ul>
           </div>
         </div>
