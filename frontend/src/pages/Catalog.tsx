@@ -93,7 +93,10 @@ export default function CatalogPage() {
     return (
       <div className="catalog-error-container">
         <div className="catalog-error-content">
-          <p>{error}</p>
+          <p>Не удалось загрузить товары</p>
+          <p style={{ marginTop: '6px', color: '#6C757D', fontSize: '13px' }}>
+            {error}
+          </p>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             Обновить
           </button>

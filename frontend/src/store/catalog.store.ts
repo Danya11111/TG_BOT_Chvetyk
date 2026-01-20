@@ -54,8 +54,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         limit: 100,
       });
       set({ products });
-    } catch (_error) {
-      set({ error: 'Не удалось загрузить товары' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить товары';
+      set({ error: message || 'Не удалось загрузить товары' });
     } finally {
       set({ loading: false });
     }

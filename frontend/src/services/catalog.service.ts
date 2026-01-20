@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { getCategories, getProducts } from '../api/products.api';
 import { Category, Pagination, Product } from '../types/catalog';
 
@@ -24,7 +25,14 @@ export async function fetchProducts(params?: {
       pagination: response.pagination,
     };
   } catch (error) {
-    throw new Error('Failed to load products');
+    const errorMessage = isAxiosError(error)
+      ? error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        (error.response?.status ? `API error: ${error.response.status}` : error.message)
+      : error instanceof Error
+        ? error.message
+        : 'Неизвестная ошибка';
+    throw new Error(errorMessage);
   }
 }
 
