@@ -25,6 +25,14 @@ export const PAYMENT_TYPES = {
   CARD: 'card',
   ONLINE: 'online',
   TRANSFER: 'transfer',
+  CARD_REQUISITES: 'card_requisites',
+  SBP_QR: 'sbp_qr',
+} as const;
+
+export const PAYMENT_STATUSES = {
+  PENDING_CONFIRMATION: 'pending_confirmation',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'rejected',
 } as const;
 
 // Типы операций с бонусами

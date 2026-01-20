@@ -1,7 +1,27 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { pool, testConnection } from './connection';
 import { logger } from '../utils/logger';
+
+const ensureMigrationsTable = async () => {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+  } finally {
+    client.release();
+  }
+};
+
+const getExecutedMigrations = async (): Promise<Set<string>> => {
+  const result = await pool.query('SELECT filename FROM schema_migrations');
+  return new Set(result.rows.map((row) => row.filename));
+};
 
 async function runMigrations(): Promise<void> {
   try {
@@ -13,30 +33,56 @@ async function runMigrations(): Promise<void> {
 
     logger.info('Running migrations...');
 
-    // Чтение SQL файла миграции
-    // Для tsx используем process.cwd(), для production - __dirname из dist
-    const migrationPath = join(
-      process.cwd(),
-      process.env.NODE_ENV === 'production' ? 'dist' : 'src',
-      'database',
-      'migrations',
-      '001_initial_schema.sql'
-    );
-    const migrationSQL = readFileSync(migrationPath, 'utf-8');
+    // Пути к директориям миграций (для разных окружений)
+    const migrationDirs = [
+      join(process.cwd(), 'dist', 'database', 'migrations'),
+      join(process.cwd(), 'src', 'database', 'migrations'),
+      '/app/src/database/migrations',
+    ];
 
-    // Выполнение миграции
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(migrationSQL);
-      await client.query('COMMIT');
-      logger.info('✅ Migrations completed successfully');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    const migrationDir = migrationDirs.find((dir) => existsSync(dir));
+    if (!migrationDir) {
+      throw new Error(`Migration directory not found. Checked: ${migrationDirs.join(', ')}`);
     }
+
+    await ensureMigrationsTable();
+    const executed = await getExecutedMigrations();
+
+    const files = readdirSync(migrationDir)
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
+
+    if (files.length === 0) {
+      logger.warn(`No migration files found in ${migrationDir}`);
+      return;
+    }
+
+    logger.info(`Using migration directory: ${migrationDir}`);
+
+    for (const file of files) {
+      if (executed.has(file)) {
+        logger.info(`Skipping migration ${file} (already applied)`);
+        continue;
+      }
+
+      const filePath = join(migrationDir, file);
+      const migrationSQL = readFileSync(filePath, 'utf-8');
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(migrationSQL);
+        await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+        await client.query('COMMIT');
+        logger.info(`✅ Migration applied: ${file}`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+    logger.info('✅ All migrations completed successfully');
   } catch (error) {
     logger.error('Migration failed:', error);
     process.exit(1);

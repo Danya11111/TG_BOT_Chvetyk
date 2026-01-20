@@ -1,97 +1,110 @@
-:root {
-  /* Цветовая палитра (будет настроена позже) */
-  --primary-color: #FF6B9D;
-  --secondary-color: #C44569;
-  --accent-color: #FFA07A;
-  --background-color: #FFFFFF;
-  --surface-color: #F8F9FA;
-  --text-primary: #212529;
-  --text-secondary: #6C757D;
-  --border-color: #DEE2E6;
-  --success-color: #28A745;
-  --error-color: #DC3545;
-  --warning-color: #FFC107;
+@import './theme.css';
 
-  /* Telegram WebApp colors */
-  --tg-theme-bg-color: var(--background-color);
-  --tg-theme-text-color: var(--text-primary);
-  --tg-theme-hint-color: var(--text-secondary);
-  --tg-theme-link-color: var(--primary-color);
-  --tg-theme-button-color: var(--primary-color);
-  --tg-theme-button-text-color: #FFFFFF;
-}
-
-* {
+/* Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none; /* Prevent context menu on hold */
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--tg-theme-bg-color);
-  color: var(--tg-theme-text-color);
-  min-height: 100vh;
+  overflow-x: hidden;
 }
 
-#root {
-  min-height: 100vh;
-}
-
-/* Утилиты */
+/* Utilities */
 .container {
-  max-width: 100%;
+  max-width: 600px; /* Mobile optimal width */
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 var(--spacing-lg);
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s var(--transition-normal) forwards;
+}
+
+/* Component Classes (Shared) */
 .btn {
-  padding: 12px 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
+  font-family: inherit;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-fast);
+  outline: none;
+  font-size: 15px;
+}
+
+.btn:active {
+  transform: scale(0.97);
 }
 
 .btn-primary {
-  background-color: var(--tg-theme-button-color);
-  color: var(--tg-theme-button-text-color);
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
+  background-color: var(--color-accent);
+  color: var(--text-on-accent);
+  border-radius: var(--radius-lg); /* Friendlier buttons */
+  padding: 12px 24px;
+  box-shadow: 0 4px 12px rgba(42, 36, 40, 0.15);
 }
 
 .btn-secondary {
-  background-color: var(--surface-color);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background-color: var(--color-primary-light);
+  color: var(--color-accent);
+  border-radius: var(--radius-lg);
+  padding: 12px 24px;
 }
 
-.btn-secondary:hover {
-  background-color: var(--border-color);
+/* Skeleton Loading - Refined */
+.skeleton {
+  background: #EFEFF4;
+  position: relative;
+  overflow: hidden;
 }
 
-.loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 50vh;
-  font-size: 18px;
-  color: var(--text-secondary);
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.4) 20%,
+    rgba(255, 255, 255, 0.7) 60%,
+    rgba(255, 255, 255, 0)
+  );
+  animation: shimmer 2s infinite;
 }
 
-.error {
-  color: var(--error-color);
-  padding: 16px;
-  text-align: center;
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

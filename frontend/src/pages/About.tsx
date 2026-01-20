@@ -1,14 +1,65 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 
 export default function AboutPage() {
+  const navigate = useNavigate();
+  const { config } = useCustomerConfig();
+
   useEffect(() => {
     WebApp.MainButton.hide();
   }, []);
 
   return (
-    <div className="container" style={{ paddingTop: '20px' }}>
-      <h1 style={{ marginBottom: '20px' }}>ℹ️ О нас</h1>
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#FFFFFF',
+      paddingBottom: '60px'
+    }}>
+      {/* Заголовок с кнопкой назад */}
+      <div style={{
+        backgroundColor: '#FFCADC',
+        padding: '12px 16px',
+        color: '#2D1B2E',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/catalog', { replace: false });
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <svg 
+            width="20" 
+            height="20" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="#2D1B2E"
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <div style={{ fontSize: '16px', fontWeight: 'bold', flex: 1 }}>
+          О нас
+        </div>
+      </div>
+
+      <div className="container" style={{ paddingTop: '20px' }}>
       
       <div style={{ 
         padding: '20px',
@@ -16,19 +67,256 @@ export default function AboutPage() {
         borderRadius: '12px',
         marginBottom: '20px'
       }}>
-        <p style={{ marginBottom: '16px', lineHeight: '1.6' }}>
-          Информация о компании будет добавлена позже.
+        <h2 style={{ margin: '0 0 12px', fontSize: '18px', color: '#2D1B2E' }}>
+          {config?.brand?.displayName || 'Говорящие цветы'}
+        </h2>
+        <p style={{ marginBottom: '10px', lineHeight: '1.6', color: '#495057' }}>
+          Цветочный сервис в {config?.delivery?.city || 'Чебоксарах'}. Собираем букеты с {config?.delivery?.workingHours || '09:00–21:00'} и доставляем в течение {config?.delivery?.avgTime || '1–2 часов'} по городу и ближайшим районам.
         </p>
-        <p style={{ color: '#6C757D', fontSize: '14px' }}>
-          Вы можете связаться с нами для получения дополнительной информации.
+        <p style={{ margin: 0, color: '#2D1B2E', fontWeight: 500 }}>
+          Оформляйте заказы в боте {config?.brand?.botName || 'FlowersStudioBot'} — отвечаем быстро.
         </p>
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <h2 style={{ marginBottom: '12px', fontSize: '18px' }}>Контакты</h2>
-        <p style={{ color: '#6C757D', fontSize: '14px' }}>
-          Контактная информация будет добавлена позже.
-        </p>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Контакты</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: '#2D1B2E', fontSize: '14px' }}>
+          <div><strong>Телефон:</strong> <a href={`tel:${config?.contacts?.phone || '+79603068713'}`} style={{ color: '#2D1B2E' }}>{config?.contacts?.phone || '8-960-306-87-13'}</a></div>
+          <div><strong>Email:</strong> <a href={`mailto:${config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}`} style={{ color: '#2D1B2E' }}>{config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}</a></div>
+          <div><strong>Адрес:</strong> {config?.contacts?.address || 'г. Чебоксары, ул. Университетская, 38/3'}</div>
+          <div><strong>График:</strong> {config?.contacts?.workHours || 'ежедневно 09:00–21:00'}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+            <span style={{ fontWeight: 600 }}>Социальные сети:</span>
+            {config?.contacts?.social?.telegram && (
+              <a href={config.contacts.social.telegram} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Telegram</a>
+            )}
+            {config?.contacts?.social?.instagram && (
+              <a href={config.contacts.social.instagram} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Instagram</a>
+            )}
+            {config?.contacts?.social?.vk && (
+              <a href={config.contacts.social.vk} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>VK</a>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+            <span style={{ fontWeight: 600 }}>Ссылки:</span>
+            {config?.contacts?.links?.site && (
+              <a href={config.contacts.links.site} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Официальный сайт</a>
+            )}
+            {config?.contacts?.links?.yandexMaps && (
+              <a href={config.contacts.links.yandexMaps} target="_blank" rel="noreferrer" style={{ color: '#495057' }}>Яндекс.Карты</a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Доставка</h2>
+        <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '16px', border: '1px solid #FFCADC' }}>
+          <div style={{ marginBottom: '8px', fontWeight: 600, color: '#2D1B2E' }}>
+            Стоимость по зонам ({config?.delivery?.workingHours || '09:00–21:00'}):
+          </div>
+          <ul style={{ margin: '0 0 12px 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+            {(config?.delivery?.zones || [
+              { name: 'Чебоксары', price: 'бесплатно' },
+              { name: 'Новый город', price: '300 ₽' },
+              { name: 'Новочебоксарск', price: '400 ₽' },
+              { name: 'Кугеси', price: '400 ₽' },
+              { name: 'Лапсары', price: '400 ₽' },
+              { name: 'Другие районы', price: 'по договоренности с менеджером' },
+            ]).map((zone) => (
+              <li key={`${zone.name}-${zone.price}`}>{zone.name} — {zone.price}</li>
+            ))}
+          </ul>
+          <div style={{ color: '#495057', fontSize: '14px' }}>
+            • Доставляем с {config?.delivery?.workingHours || '09:00–21:00'} (после {config?.delivery?.afterHoursStart || '21:00'} +{config?.delivery?.afterHoursFee || '500 ₽'}, согласовываем заранее).<br/>
+            • Среднее время доставки: {config?.delivery?.avgTime || '1–2 часа'}.<br/>
+            {(config?.delivery?.notes || ['Заказы на ночь оформляйте с 09:00 до 21:00.', 'Минимальной суммы заказа нет.']).map((note) => (
+              <span key={note}>• {note}<br/></span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Самовывоз</h2>
+        <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '16px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
+          <div style={{ marginBottom: '8px' }}><strong>Адрес:</strong> {config?.pickup?.address || 'ул. Университетская, 38 к. 3, Чебоксары, 428034'}</div>
+          <div style={{ marginBottom: '8px' }}><strong>Время работы точки:</strong> {config?.pickup?.hours || '09:00–21:00'}</div>
+          <div style={{ color: '#495057', fontSize: '14px' }}>
+            {config?.pickup?.note || 'Подробные инструкции по самовывозу уточняются — менеджер напишет после оформления заказа.'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Бонусы и оплата</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '14px', border: '1px solid #FFCADC', color: '#2D1B2E' }}>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.bonuses?.title || 'Бонусная программа'}</div>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+              {(config?.bonuses?.rules || [
+                'Начисляем 5% от суммы заказа.',
+                'Начисление не распространяется на оплату доставки.',
+                'Списание до 10% от суммы заказа (не действует на акции).',
+                'Списывать можно только на товары, доставку бонусами не оплачиваем.',
+                'Минимальной суммы для начисления/списания нет.',
+                'Округляем начисление вверх до целого рубля.',
+              ]).map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+          </div>
+          <div style={{ backgroundColor: '#F8F9FA', borderRadius: '12px', padding: '14px', border: '1px solid #E0E0E0', color: '#2D1B2E' }}>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.payments?.title || 'Способы оплаты'}</div>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+              {(config?.payments?.methods || [
+                'Наличные при получении.',
+                'Оплата по реквизитам карты.',
+              ]).map((method) => (
+                <li key={method}>{method}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      {/* Нижняя навигация */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#FFCADC',
+        padding: '8px 0',
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        zIndex: 1000
+      }}>
+        <div 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/catalog', { replace: false });
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            cursor: 'pointer',
+            color: '#2D1B2E'
+          }}
+        >
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="#2D1B2E"
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+          </svg>
+          <span style={{ fontSize: '10px' }}>Каталог</span>
+        </div>
+        
+        <div 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/cart', { replace: false });
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            cursor: 'pointer',
+            color: '#2D1B2E'
+          }}
+        >
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="#2D1B2E"
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span style={{ fontSize: '10px' }}>Корзина</span>
+        </div>
+        
+        <div 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/profile', { replace: false });
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            cursor: 'pointer',
+            color: '#2D1B2E'
+          }}
+        >
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="#2D1B2E"
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="8" r="5"></circle>
+            <path d="M3 21c0-5 4-9 9-9s9 4 9 9"></path>
+          </svg>
+          <span style={{ fontSize: '10px' }}>Профиль</span>
+        </div>
+        
+        <div 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/about', { replace: false });
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            cursor: 'pointer',
+            color: '#2D1B2E'
+          }}
+        >
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="#2D1B2E"
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <span style={{ fontSize: '10px' }}>О нас</span>
+        </div>
       </div>
     </div>
   );
