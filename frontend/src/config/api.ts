@@ -2,11 +2,12 @@
 // В проде и в Telegram WebApp используем origin, в dev - Vite proxy или VITE_API_URL
 const getApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) {
-    return envUrl;
-  }
   if (typeof window !== 'undefined') {
-    const { protocol, origin, host } = window.location;
+    const { protocol, origin, host, hostname } = window.location;
+    const isTelegramHost = /(^|\.)t\.me$|telegram\.org$|web\.telegram\.org$/.test(hostname);
+    if (isTelegramHost) {
+      return envUrl || 'https://bot-flowers-studio-ru.ru';
+    }
     if (protocol === 'http:' || protocol === 'https:') {
       return origin;
     }
@@ -14,7 +15,7 @@ const getApiUrl = () => {
       return `https://${host}`;
     }
   }
-  return '';
+  return envUrl || 'https://bot-flowers-studio-ru.ru';
 };
 
 const API_URL = getApiUrl();

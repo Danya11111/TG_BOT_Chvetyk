@@ -5,6 +5,8 @@ import { useCartStore } from '../store/cart.store';
 import { useCheckoutStore, CheckoutFormData, DeliveryAddress } from '../store/checkout.store';
 import { createOrder, getOrderStatus } from '../api/orders.api';
 import { useCustomerConfig } from '../hooks/useCustomerConfig';
+import { BottomNavigation } from '../components/BottomNavigation';
+import { AppFooter } from '../components/AppFooter';
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -16,6 +18,9 @@ export default function CheckoutPage() {
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'confirmed' | 'rejected'>('idle');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
+  const [paymentCountdown, setPaymentCountdown] = useState(15);
+  const [isPaymentConfirmReady, setIsPaymentConfirmReady] = useState(false);
   const { config: customerConfig } = useCustomerConfig();
 
   // Загружаем сохраненные данные или используем значения по умолчанию
@@ -109,11 +114,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (formData.paymentType !== 'card_requisites') {
-      WebApp.showAlert('Выберите оплату по реквизитам карты');
-      return;
-    }
-
     if (orderId) {
       return;
     }
@@ -138,6 +138,15 @@ export default function CheckoutPage() {
       setLoading(false);
     }
   }, [formData, validateForm, orderId, clearCart, clearFormData, items]);
+
+  const handleProceedToPayment = useCallback(() => {
+    const isValid = validateForm();
+    if (!isValid) {
+      WebApp.showAlert('Пожалуйста, заполните все обязательные поля');
+      return;
+    }
+    setPaymentStep('payment');
+  }, [validateForm]);
 
   useEffect(() => {
     if (items.length === 0 && !orderId) {
@@ -207,6 +216,30 @@ export default function CheckoutPage() {
     };
   }, [orderId, paymentStatus]);
 
+  useEffect(() => {
+    if (paymentStep !== 'payment' || orderId) {
+      setPaymentCountdown(15);
+      setIsPaymentConfirmReady(false);
+      return;
+    }
+
+    setIsPaymentConfirmReady(false);
+    setPaymentCountdown(15);
+
+    const startedAt = Date.now();
+    const intervalId = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remaining = Math.max(15 - elapsed, 0);
+      setPaymentCountdown(remaining);
+      if (remaining === 0) {
+        setIsPaymentConfirmReady(true);
+        window.clearInterval(intervalId);
+      }
+    }, 250);
+
+    return () => window.clearInterval(intervalId);
+  }, [paymentStep, orderId]);
+
   const handleInputChange = (field: keyof CheckoutFormData, value: any) => {
     if (orderId) {
       return;
@@ -271,17 +304,18 @@ export default function CheckoutPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#FFFFFF',
-      paddingBottom: '100px'
+      backgroundColor: 'var(--bg-main)',
+      paddingBottom: '120px'
     }}>
       {/* Заголовок с кнопкой назад */}
       <div style={{
-        backgroundColor: '#FFCADC',
+        backgroundColor: 'var(--bg-secondary)',
         padding: '12px 16px',
-        color: '#2D1B2E',
+        color: 'var(--text-primary)',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '12px',
+        borderBottom: '1px solid rgba(0,0,0,0.05)'
       }}>
         <button
           onClick={(e) => {
@@ -303,7 +337,7 @@ export default function CheckoutPage() {
             height="20" 
             viewBox="0 0 24 24" 
             fill="none" 
-            stroke="#2D1B2E"
+            stroke="currentColor"
             strokeWidth="2.5" 
             strokeLinecap="round" 
             strokeLinejoin="round"
@@ -325,14 +359,14 @@ export default function CheckoutPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.4)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000
         }}>
           <div style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-surface)',
             padding: '24px',
             borderRadius: '12px',
             textAlign: 'center'
@@ -343,20 +377,22 @@ export default function CheckoutPage() {
         </div>
       )}
 
+      {paymentStep === 'form' && (
+        <>
       {/* Контактная информация */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '16px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Контактная информация
         </h2>
 
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
             Имя <span style={{ color: '#DC3545' }}>*</span>
           </label>
           <input
@@ -368,11 +404,11 @@ export default function CheckoutPage() {
               width: '100%',
               padding: '12px',
               borderRadius: '8px',
-              border: errors.name ? '2px solid #DC3545' : '1px solid #DEE2E6',
+              border: errors.name ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
               fontSize: '16px',
               boxSizing: 'border-box',
-              color: '#2D1B2E',
-              backgroundColor: '#FFFFFF'
+              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-surface)'
             }}
           />
           {errors.name && (
@@ -381,7 +417,7 @@ export default function CheckoutPage() {
         </div>
 
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
             Телефон <span style={{ color: '#DC3545' }}>*</span>
           </label>
           <input
@@ -393,11 +429,11 @@ export default function CheckoutPage() {
               width: '100%',
               padding: '12px',
               borderRadius: '8px',
-              border: errors.phone ? '2px solid #DC3545' : '1px solid #DEE2E6',
+              border: errors.phone ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
               fontSize: '16px',
               boxSizing: 'border-box',
-              color: '#2D1B2E',
-              backgroundColor: '#FFFFFF'
+              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-surface)'
             }}
           />
           {errors.phone && (
@@ -406,7 +442,7 @@ export default function CheckoutPage() {
         </div>
 
         <div>
-          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
             Email (необязательно)
           </label>
           <input
@@ -418,11 +454,11 @@ export default function CheckoutPage() {
               width: '100%',
               padding: '12px',
               borderRadius: '8px',
-              border: errors.email ? '2px solid #DC3545' : '1px solid #DEE2E6',
+              border: errors.email ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
               fontSize: '16px',
               boxSizing: 'border-box',
-              color: '#2D1B2E',
-              backgroundColor: '#FFFFFF'
+              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-surface)'
             }}
           />
           {errors.email && (
@@ -433,13 +469,13 @@ export default function CheckoutPage() {
 
       {/* Тип доставки */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '16px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Способ получения
         </h2>
 
@@ -449,9 +485,9 @@ export default function CheckoutPage() {
             alignItems: 'center',
             padding: '12px',
             borderRadius: '8px',
-            border: formData.deliveryType === 'delivery' ? '2px solid #FF6B9D' : '1px solid #DEE2E6',
+            border: formData.deliveryType === 'delivery' ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.1)',
             cursor: 'pointer',
-            backgroundColor: formData.deliveryType === 'delivery' ? '#FFF0F5' : '#FFFFFF'
+            backgroundColor: formData.deliveryType === 'delivery' ? 'var(--bg-secondary)' : 'var(--bg-surface)'
           }}>
             <input
               type="radio"
@@ -462,8 +498,8 @@ export default function CheckoutPage() {
               style={{ marginRight: '12px', width: '20px', height: '20px' }}
             />
             <div>
-              <div style={{ fontWeight: '500', color: '#2D1B2E' }}>🚚 Доставка</div>
-              <div style={{ fontSize: '12px', color: '#495057' }}>Доставим по указанному адресу</div>
+              <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>🚚 Доставка</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Доставим по указанному адресу</div>
             </div>
           </label>
 
@@ -472,9 +508,9 @@ export default function CheckoutPage() {
             alignItems: 'center',
             padding: '12px',
             borderRadius: '8px',
-            border: formData.deliveryType === 'pickup' ? '2px solid #FF6B9D' : '1px solid #DEE2E6',
+            border: formData.deliveryType === 'pickup' ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.1)',
             cursor: 'pointer',
-            backgroundColor: formData.deliveryType === 'pickup' ? '#FFF0F5' : '#FFFFFF'
+            backgroundColor: formData.deliveryType === 'pickup' ? 'var(--bg-secondary)' : 'var(--bg-surface)'
           }}>
             <input
               type="radio"
@@ -485,8 +521,8 @@ export default function CheckoutPage() {
               style={{ marginRight: '12px', width: '20px', height: '20px' }}
             />
             <div>
-              <div style={{ fontWeight: '500', color: '#2D1B2E' }}>📍 Самовывоз</div>
-              <div style={{ fontSize: '12px', color: '#495057' }}>Заберёте из нашего магазина</div>
+              <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>📍 Самовывоз</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Заберёте из нашего магазина</div>
             </div>
           </label>
         </div>
@@ -494,7 +530,7 @@ export default function CheckoutPage() {
         {/* Адрес доставки */}
         {formData.deliveryType === 'delivery' && (
           <div style={{ marginTop: '20px' }}>
-            <h3 style={{ fontSize: '16px', marginBottom: '12px', fontWeight: '500', color: '#2D1B2E' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>
               Адрес доставки
             </h3>
 
@@ -508,7 +544,7 @@ export default function CheckoutPage() {
                   width: '100%',
                   padding: '12px',
                   borderRadius: '8px',
-                  border: errors.street ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                  border: errors.street ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                   fontSize: '16px',
                   boxSizing: 'border-box'
                 }}
@@ -529,11 +565,11 @@ export default function CheckoutPage() {
                     width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
-                    border: errors.house ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                  border: errors.house ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                     fontSize: '16px',
                     boxSizing: 'border-box',
-                    color: '#2D1B2E',
-                    backgroundColor: '#FFFFFF'
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--bg-surface)'
                   }}
                 />
                 {errors.house && (
@@ -550,11 +586,11 @@ export default function CheckoutPage() {
                     width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
-                    border: '1px solid #DEE2E6',
+                    border: '1px solid rgba(0,0,0,0.1)',
                     fontSize: '16px',
                     boxSizing: 'border-box',
-                    color: '#2D1B2E',
-                    backgroundColor: '#FFFFFF'
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--bg-surface)'
                   }}
                 />
               </div>
@@ -562,7 +598,7 @@ export default function CheckoutPage() {
           </div>
         )}
         
-        <div style={{ marginTop: '16px', backgroundColor: '#FFF0F5', borderRadius: '12px', padding: '12px', border: '1px solid #FFCADC', color: '#2D1B2E', fontSize: '14px', lineHeight: 1.5 }}>
+        <div style={{ marginTop: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '12px', border: '1px solid rgba(201, 163, 58, 0.3)', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.5 }}>
           <div style={{ fontWeight: 600, marginBottom: '6px' }}>Условия доставки</div>
           <div>• {deliveryZonesText || 'Тарифы будут добавлены позже.'}</div>
           <div>
@@ -577,18 +613,18 @@ export default function CheckoutPage() {
 
       {/* Дата и время доставки/самовывоза */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '16px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Дата и время
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
               Дата <span style={{ color: '#DC3545' }}>*</span>
             </label>
             <input
@@ -599,11 +635,11 @@ export default function CheckoutPage() {
                 width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: errors.deliveryDate ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                border: errors.deliveryDate ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                 fontSize: '16px',
                 boxSizing: 'border-box',
-                color: '#2D1B2E',
-                backgroundColor: '#FFFFFF'
+                color: 'var(--text-primary)',
+                backgroundColor: 'var(--bg-surface)'
               }}
             />
             {errors.deliveryDate && (
@@ -611,7 +647,7 @@ export default function CheckoutPage() {
             )}
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
               Время <span style={{ color: '#DC3545' }}>*</span>
             </label>
             <input
@@ -622,11 +658,11 @@ export default function CheckoutPage() {
                 width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: errors.deliveryTime ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                border: errors.deliveryTime ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                 fontSize: '16px',
                 boxSizing: 'border-box',
-                color: '#2D1B2E',
-                backgroundColor: '#FFFFFF'
+                color: 'var(--text-primary)',
+                backgroundColor: 'var(--bg-surface)'
               }}
             />
             {errors.deliveryTime && (
@@ -638,18 +674,18 @@ export default function CheckoutPage() {
 
       {/* Получатель */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '16px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Данные получателя
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
               Имя получателя <span style={{ color: '#DC3545' }}>*</span>
             </label>
             <input
@@ -661,11 +697,11 @@ export default function CheckoutPage() {
                 width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: errors.recipientName ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                border: errors.recipientName ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                 fontSize: '16px',
                 boxSizing: 'border-box',
-                color: '#2D1B2E',
-                backgroundColor: '#FFFFFF'
+                color: 'var(--text-primary)',
+                backgroundColor: 'var(--bg-surface)'
               }}
             />
             {errors.recipientName && (
@@ -673,7 +709,7 @@ export default function CheckoutPage() {
             )}
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
               Телефон получателя <span style={{ color: '#DC3545' }}>*</span>
             </label>
             <input
@@ -685,11 +721,11 @@ export default function CheckoutPage() {
                 width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: errors.recipientPhone ? '2px solid #DC3545' : '1px solid #DEE2E6',
+                border: errors.recipientPhone ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
                 fontSize: '16px',
                 boxSizing: 'border-box',
-                color: '#2D1B2E',
-                backgroundColor: '#FFFFFF'
+                color: 'var(--text-primary)',
+                backgroundColor: 'var(--bg-surface)'
               }}
             />
             {errors.recipientPhone && (
@@ -701,13 +737,13 @@ export default function CheckoutPage() {
 
       {/* Открытка */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '16px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '12px', fontWeight: '600', color: '#2D1B2E' }}>
+        <h2 style={{ fontSize: '18px', marginBottom: '12px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Текст открытки
         </h2>
         <textarea
@@ -719,13 +755,13 @@ export default function CheckoutPage() {
             width: '100%',
             padding: '12px',
             borderRadius: '8px',
-            border: errors.cardText ? '2px solid #DC3545' : '1px solid #DEE2E6',
+          border: errors.cardText ? '2px solid #DC3545' : '1px solid rgba(0,0,0,0.1)',
             fontSize: '16px',
             fontFamily: 'inherit',
             resize: 'vertical',
             boxSizing: 'border-box',
-            color: '#2D1B2E',
-            backgroundColor: '#FFFFFF'
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-surface)'
           }}
         />
         {errors.cardText && (
@@ -733,124 +769,15 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      {/* Способ оплаты */}
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '12px',
-        padding: '20px',
-        marginBottom: '16px',
-        border: '1px solid #DEE2E6'
-      }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: '#2D1B2E' }}>
-          Способ оплаты
-        </h2>
-
-        {!isOrderLocked && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {paymentOptions.map((payment) => (
-              <label
-                key={payment.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  border: formData.paymentType === payment.value ? '2px solid #FF6B9D' : '1px solid #DEE2E6',
-                  cursor: payment.disabled ? 'not-allowed' : 'pointer',
-                  opacity: payment.disabled ? 0.6 : 1,
-                  backgroundColor: formData.paymentType === payment.value ? '#FFF0F5' : '#FFFFFF'
-                }}
-              >
-                <input
-                  type="radio"
-                  name="paymentType"
-                  value={payment.value}
-                  checked={formData.paymentType === payment.value}
-                  disabled={payment.disabled || isOrderLocked}
-                  onChange={(e) => handleInputChange('paymentType', e.target.value)}
-                  style={{ marginRight: '12px', width: '20px', height: '20px' }}
-                />
-                <span style={{ marginRight: '8px', fontSize: '20px' }}>{payment.icon}</span>
-                <span style={{ fontWeight: '500', color: '#2D1B2E' }}>{payment.label}</span>
-              </label>
-            ))}
-          </div>
-        )}
-
-        {formData.paymentType === 'card_requisites' && !isOrderLocked && (
-          <div style={{
-            marginTop: '16px',
-            backgroundColor: '#FFF0F5',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid #FFCADC'
-          }}>
-            <div style={{ fontWeight: 600, color: '#2D1B2E', marginBottom: '8px' }}>
-              {customerConfig?.cardRequisites.title || 'Оплата по реквизитам карты'}
-            </div>
-            <div style={{ fontSize: '14px', color: '#2D1B2E', lineHeight: 1.5 }}>
-              {customerConfig?.cardRequisites.details?.length
-                ? customerConfig.cardRequisites.details.map((line) => (
-                    <div key={line}>{line}</div>
-                  ))
-                : <div>Реквизиты будут добавлены позже.</div>}
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '13px', color: '#6C757D' }}>
-              {customerConfig?.cardRequisites.note || 'После оплаты нажмите кнопку ниже.'}
-            </div>
-            <button
-              onClick={handlePaymentCompleted}
-              disabled={loading || orderId !== null}
-              style={{
-                marginTop: '12px',
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: loading || orderId !== null ? '#DEE2E6' : '#FF6B9D',
-                color: '#FFFFFF',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: loading || orderId !== null ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? 'Отправляем...' : 'Оплата завершена'}
-            </button>
-          </div>
-        )}
-
-        {orderId && (
-          <div style={{
-            marginTop: '16px',
-            backgroundColor: '#F8F9FA',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid #DEE2E6'
-          }}>
-            <div style={{ fontWeight: 600, color: '#2D1B2E', marginBottom: '6px' }}>
-              {orderNumber ? `Заказ #${orderNumber}` : 'Заказ отправлен'}
-            </div>
-            <div style={{ fontSize: '14px', color: '#2D1B2E' }}>
-              {statusMessage || 'Платеж обрабатывается'}
-            </div>
-            {paymentStatus === 'rejected' && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: '#6C757D' }}>
-                Если оплата была проведена, свяжитесь с менеджером: {customerConfig?.managerPhone || '+7 900 000-00-00'}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Комментарий */}
       <div style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-surface)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '24px',
-        border: '1px solid #DEE2E6'
+        border: '1px solid rgba(0,0,0,0.06)'
       }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#2D1B2E' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
           Комментарий к заказу
         </label>
         <textarea
@@ -862,20 +789,20 @@ export default function CheckoutPage() {
             width: '100%',
             padding: '12px',
             borderRadius: '8px',
-            border: '1px solid #DEE2E6',
+          border: '1px solid rgba(0,0,0,0.1)',
             fontSize: '16px',
             fontFamily: 'inherit',
             resize: 'vertical',
             boxSizing: 'border-box',
-            color: '#2D1B2E',
-            backgroundColor: '#FFFFFF'
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-surface)'
           }}
         />
       </div>
 
       {/* Итого */}
       <div style={{
-        backgroundColor: '#F8F9FA',
+        backgroundColor: 'var(--bg-secondary)',
         borderRadius: '12px',
         padding: '20px',
         marginBottom: '20px'
@@ -885,17 +812,217 @@ export default function CheckoutPage() {
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <span style={{ fontSize: '20px', fontWeight: '600', color: '#2D1B2E' }}>Итого:</span>
+          <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>Итого:</span>
           <span style={{
             fontSize: '28px',
             fontWeight: 'bold',
-            color: '#FFCADC'
+            color: 'var(--color-accent)'
           }}>
             {getTotal().toLocaleString('ru-RU')} ₽
           </span>
         </div>
       </div>
+      <button
+        onClick={handleProceedToPayment}
+        disabled={loading || isOrderLocked}
+        style={{
+          width: '100%',
+          padding: '14px',
+          borderRadius: '10px',
+          border: 'none',
+          backgroundColor: loading || isOrderLocked ? '#DEE2E6' : 'var(--color-accent)',
+          color: '#FFFFFF',
+          fontSize: '16px',
+          fontWeight: 600,
+          cursor: loading || isOrderLocked ? 'not-allowed' : 'pointer'
+        }}
+      >
+        Перейти к оплате
+      </button>
+      </>
+      )}
+
+      {paymentStep === 'payment' && (
+        <>
+          <div style={{ marginBottom: '12px' }}>
+            <button
+              onClick={() => setPaymentStep('form')}
+              disabled={loading || isOrderLocked}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                color: 'var(--color-accent)',
+                fontSize: '14px',
+                cursor: loading || isOrderLocked ? 'not-allowed' : 'pointer'
+              }}
+            >
+              ← Вернуться к данным заказа
+            </button>
+          </div>
+
+          {/* Способ оплаты */}
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '16px',
+            border: '1px solid rgba(0,0,0,0.06)'
+          }}>
+            <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Способ оплаты
+            </h2>
+
+            {!isOrderLocked && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {paymentOptions.map((payment) => (
+                  <label
+                    key={payment.value}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: formData.paymentType === payment.value ? '2px solid var(--color-accent)' : '1px solid rgba(0,0,0,0.1)',
+                      cursor: payment.disabled ? 'not-allowed' : 'pointer',
+                      opacity: payment.disabled ? 0.6 : 1,
+                      backgroundColor: formData.paymentType === payment.value ? 'var(--bg-secondary)' : 'var(--bg-surface)'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentType"
+                      value={payment.value}
+                      checked={formData.paymentType === payment.value}
+                      disabled={payment.disabled || isOrderLocked}
+                      onChange={(e) => handleInputChange('paymentType', e.target.value)}
+                      style={{ marginRight: '12px', width: '20px', height: '20px' }}
+                    />
+                    <span style={{ marginRight: '8px', fontSize: '20px' }}>{payment.icon}</span>
+                    <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{payment.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {formData.paymentType === 'card_requisites' && !isOrderLocked && (
+              <div style={{
+                marginTop: '16px',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '12px',
+                padding: '16px',
+                border: '1px solid rgba(201, 163, 58, 0.3)'
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  {customerConfig?.cardRequisites.title || 'Оплата по реквизитам карты'}
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  {customerConfig?.cardRequisites.details?.length
+                    ? customerConfig.cardRequisites.details.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))
+                    : <div>Реквизиты будут добавлены позже.</div>}
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {customerConfig?.cardRequisites.note || 'После оплаты нажмите кнопку ниже.'}
+                </div>
+              </div>
+            )}
+
+            {formData.paymentType === 'sbp_qr' && !isOrderLocked && (
+              <div style={{
+                marginTop: '16px',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '12px',
+                padding: '16px',
+                border: '1px solid rgba(201, 163, 58, 0.3)'
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  Оплата по QR-коду СБП
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  {customerConfig?.sbpQr?.note || 'Отсканируйте QR и оплатите, затем нажмите кнопку ниже.'}
+                </div>
+              </div>
+            )}
+
+            {!isOrderLocked && (
+              <div style={{ marginTop: '16px' }}>
+                <button
+                  onClick={handlePaymentCompleted}
+                  disabled={loading || orderId !== null || !isPaymentConfirmReady}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: loading || orderId !== null || !isPaymentConfirmReady ? '#DEE2E6' : 'var(--color-accent)',
+                    color: '#FFFFFF',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    cursor: loading || orderId !== null || !isPaymentConfirmReady ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {loading ? 'Отправляем...' : 'Оплата завершена'}
+                </button>
+                {!isPaymentConfirmReady && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Кнопка станет активна через {paymentCountdown} сек.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {orderId && (
+              <div style={{
+                marginTop: '16px',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '12px',
+                padding: '16px',
+                border: '1px solid rgba(0,0,0,0.06)'
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  {orderNumber ? `Заказ #${orderNumber}` : 'Заказ отправлен'}
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                  {statusMessage || 'Платеж обрабатывается'}
+                </div>
+                {paymentStatus === 'rejected' && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Если оплата была проведена, свяжитесь с менеджером: {customerConfig?.managerPhone || '+7 900 000-00-00'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Итого */}
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>Итого:</span>
+              <span style={{
+                fontSize: '28px',
+                fontWeight: 'bold',
+                color: 'var(--color-accent)'
+              }}>
+                {getTotal().toLocaleString('ru-RU')} ₽
+              </span>
+            </div>
+          </div>
+        </>
+      )}
       </div>
+      <AppFooter />
+      <BottomNavigation />
     </div>
   );
 }

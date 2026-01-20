@@ -15,9 +15,13 @@ interface CatalogState {
   inStockOnly: boolean;
   sort: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   loading: boolean;
+  loadingMore: boolean;
+  page: number;
+  hasMore: boolean;
   error?: string;
   fetchCategories: () => Promise<void>;
   fetchProducts: () => Promise<void>;
+  fetchMoreProducts: () => Promise<void>;
   setCategory: (categoryId?: number) => void;
   setSearchQuery: (query: string) => void;
   setPriceRange: (min?: number, max?: number) => void;
@@ -34,6 +38,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   inStockOnly: false,
   sort: 'newest',
   loading: false,
+  loadingMore: false,
+  page: 1,
+  hasMore: true,
   error: undefined,
 
   async fetchCategories() {
@@ -42,23 +49,60 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   async fetchProducts() {
-    set({ loading: true, error: undefined });
+    set({ loading: true, error: undefined, page: 1, hasMore: true });
     try {
-      const { products } = await loadProducts({
+      const { products, pagination } = await loadProducts({
         categoryId: get().selectedCategoryId,
         search: get().searchQuery,
         minPrice: get().minPrice,
         maxPrice: get().maxPrice,
         inStock: get().inStockOnly ? true : undefined,
         sort: get().sort,
-        limit: 100,
+        page: 1,
+        limit: 10,
       });
-      set({ products });
+      const totalPages = pagination?.totalPages ?? 1;
+      set({
+        products,
+        page: 1,
+        hasMore: totalPages > 1 && products.length > 0,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось загрузить товары';
-      set({ error: message || 'Не удалось загрузить товары' });
+      set({ error: message || 'Не удалось загрузить товары', hasMore: false });
     } finally {
       set({ loading: false });
+    }
+  },
+
+  async fetchMoreProducts() {
+    if (get().loadingMore || get().loading || !get().hasMore) {
+      return;
+    }
+    const nextPage = get().page + 1;
+    set({ loadingMore: true });
+    try {
+      const { products: newProducts, pagination } = await loadProducts({
+        categoryId: get().selectedCategoryId,
+        search: get().searchQuery,
+        minPrice: get().minPrice,
+        maxPrice: get().maxPrice,
+        inStock: get().inStockOnly ? true : undefined,
+        sort: get().sort,
+        page: nextPage,
+        limit: 10,
+      });
+      const totalPages = pagination?.totalPages ?? nextPage;
+      set((state) => ({
+        products: [...state.products, ...newProducts],
+        page: nextPage,
+        hasMore: nextPage < totalPages && newProducts.length > 0,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить товары';
+      set({ error: message || 'Не удалось загрузить товары', hasMore: false });
+    } finally {
+      set({ loadingMore: false });
     }
   },
 

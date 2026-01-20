@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
@@ -16,11 +16,13 @@ export default function CatalogPage() {
   const {
     categories,
     loading,
+    loadingMore,
     error,
     selectedCategoryId,
     searchQuery,
     fetchCategories,
     fetchProducts,
+    fetchMoreProducts,
     setCategory,
     setSearchQuery,
     minPrice,
@@ -31,6 +33,7 @@ export default function CatalogPage() {
     setInStockOnly,
     setSort,
     products,
+    hasMore,
   } = useCatalogStore();
 
   useEffect(() => {
@@ -44,6 +47,25 @@ export default function CatalogPage() {
   useEffect(() => {
     fetchProducts();
   }, [selectedCategoryId, searchQuery, minPrice, maxPrice, inStockOnly, sort, fetchProducts]);
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchMoreProducts();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchMoreProducts]);
 
   // Cart logic
   const addToCart = useCartStore((state) => state.addItem);
@@ -200,17 +222,30 @@ export default function CatalogPage() {
             <p>Попробуйте изменить запрос</p>
           </div>
         ) : (
-          <div className="catalog-grid">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onClick={() => handleProductClick(product)}
-                onAdd={(e) => handleAddToCart(product, e)}
-                countInCart={getProductQuantity(product.id)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="catalog-grid">
+              {products.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onClick={() => handleProductClick(product)}
+                  onAdd={(e) => handleAddToCart(product, e)}
+                  countInCart={getProductQuantity(product.id)}
+                />
+              ))}
+            </div>
+            <div ref={loadMoreRef} style={{ height: '1px' }} />
+            {loadingMore && (
+              <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-secondary)' }}>
+                Загружаем ещё товары...
+              </div>
+            )}
+            {!hasMore && products.length > 0 && (
+              <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-tertiary)' }}>
+                Больше товаров нет
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -13,6 +13,16 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, onAdd, countInCart = 0 }) => {
   const [isAddedAnim, setIsAddedAnim] = useState(false);
+  const attributes = (product as Product & { attributes?: Record<string, unknown>; image_url?: string }).attributes;
+  const extraImages = attributes?.images;
+  const rawImage =
+    product.images?.[0] ||
+    (Array.isArray(extraImages) ? (extraImages[0] as string) : undefined) ||
+    (typeof extraImages === 'string' ? extraImages : undefined) ||
+    (attributes?.image as string | undefined) ||
+    (attributes?.imageUrl as string | undefined) ||
+    (product as Product & { image_url?: string }).image_url;
+  const imageSrc = rawImage ? resolveImageUrl(rawImage) : '';
 
   const handleAddClick = (e: MouseEvent) => {
     onAdd(e);
@@ -31,9 +41,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, onAd
     <div className="product-card fade-in" onClick={onClick}>
       {/* Image Container */}
       <div className="product-card__image-container">
-        {product.images && product.images.length > 0 ? (
+        {imageSrc ? (
           <img
-            src={resolveImageUrl(product.images[0])}
+            src={imageSrc}
             alt={product.name}
             className="product-card__image"
             onError={(e) => {

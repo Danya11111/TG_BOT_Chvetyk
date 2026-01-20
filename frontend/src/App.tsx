@@ -22,9 +22,8 @@ function App() {
       WebApp.enableClosingConfirmation();
       
       // Устанавливаем цвета приложения для единого стиля
-      // Using #F7F9FC (var(--bg-main)) for header to blend with page
-      WebApp.setHeaderColor('#F7F9FC'); 
-      WebApp.backgroundColor = '#F7F9FC';
+      WebApp.setHeaderColor('#FFFFFF');
+      WebApp.setBackgroundColor('#FFFFFF');
       
       // Предотвращаем перезагрузку страницы при навигации
       // Используем onEvent для отслеживания изменений viewport
