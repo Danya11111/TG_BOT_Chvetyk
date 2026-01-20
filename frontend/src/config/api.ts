@@ -6,9 +6,12 @@ const getApiUrl = () => {
     return envUrl;
   }
   if (typeof window !== 'undefined') {
-    const { protocol, origin } = window.location;
+    const { protocol, origin, host } = window.location;
     if (protocol === 'http:' || protocol === 'https:') {
       return origin;
+    }
+    if (host) {
+      return `https://${host}`;
     }
   }
   return '';
