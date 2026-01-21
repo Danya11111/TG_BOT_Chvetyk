@@ -18,14 +18,14 @@ const payloadSchema = Joi.object({
     is_bot: Joi.boolean().optional(),
     first_name: Joi.string().trim().max(100).required(),
     last_name: Joi.string().trim().max(100).optional(),
-    username: Joi.string().alphanum().max(100).optional(),
+    username: Joi.string().trim().max(100).optional(),
     language_code: Joi.string().max(8).optional(),
     allows_write_to_pm: Joi.boolean().optional(),
     photo_url: Joi.string().uri().optional(),
   }).required(),
   auth_date: Joi.number().integer().required(),
   hash: Joi.string().hex().length(64).required(),
-  chat_instance: Joi.string().trim().min(1).required(),
+  chat_instance: Joi.string().trim().min(1).optional(),
   query_id: Joi.string().trim().optional(),
 });
 
