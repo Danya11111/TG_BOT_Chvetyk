@@ -93,7 +93,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
         .join('\n');
 
       const createdAt = new Date(orderDetails.created_at);
-      const formattedTime = createdAt.toLocaleString('ru-RU');
+      const formattedTime = createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
 
       const message =
         `${action === 'confirm' ? '✅ Оплата подтверждена!' : '❌ Оплата не прошла.'}\n\n` +
@@ -116,7 +116,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
         `${action === 'confirm' ? '✅ Оплата подтверждена' : '❌ Оплата не прошла'}\n` +
           `Заказ #${updatedOrder.order_number}\n` +
           `Менеджер: ${managerLabel}\n` +
-          `Время: ${actionTime.toLocaleString('ru-RU')}`
+          `Время: ${actionTime.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
       );
     }
 
@@ -127,7 +127,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
         `${originalText}\n\n` +
         `${action === 'confirm' ? '✅ Оплата подтверждена' : '❌ Оплата не прошла'}\n` +
         `Менеджер: ${managerLabel}\n` +
-        `Время: ${actionTime.toLocaleString('ru-RU')}`;
+        `Время: ${actionTime.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
       try {
         await ctx.editMessageText(updatedText, { reply_markup: { inline_keyboard: [] } });
       } catch (error) {
