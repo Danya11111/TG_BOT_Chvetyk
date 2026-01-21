@@ -32,7 +32,6 @@ export default function CatalogPage() {
     inStockOnly,
     sort,
     setPriceRange,
-    setInStockOnly,
     setSort,
     products,
     hasMore,
@@ -210,15 +209,7 @@ export default function CatalogPage() {
             placeholder="до"
           />
         </div>
-        <label className="catalog-filter-checkbox">
-          <input
-            type="checkbox"
-            checked={inStockOnly}
-            onChange={(e) => setInStockOnly(e.target.checked)}
-          />
-          В наличии
-        </label>
-        <div>
+        <div className="catalog-filter-sort">
           <div className="catalog-filter-label">Сортировка</div>
           <select
             className="catalog-filter-select"

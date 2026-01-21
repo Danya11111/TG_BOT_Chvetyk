@@ -737,6 +737,9 @@ export default function CheckoutPage() {
               onChange={(e) => handleInputChange('deliveryDate', e.target.value)}
               style={{
                 width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
+                display: 'block',
                 padding: '12px',
                 borderRadius: '8px',
                 border: errors.deliveryDate ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',
@@ -760,6 +763,9 @@ export default function CheckoutPage() {
               onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
               style={{
                 width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
+                display: 'block',
                 padding: '12px',
                 borderRadius: '8px',
                 border: errors.deliveryTime ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',

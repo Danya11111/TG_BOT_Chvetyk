@@ -229,7 +229,7 @@
 }
 
 .catalog-filters {
-  padding: 8px var(--spacing-lg) 0;
+  padding: 8px var(--spacing-lg) 10px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px 12px;
@@ -265,6 +265,19 @@
   gap: 8px;
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.catalog-filter-sort {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.catalog-filter-sort .catalog-filter-select {
+  max-width: 220px;
 }
 
 @media (max-width: 480px) {

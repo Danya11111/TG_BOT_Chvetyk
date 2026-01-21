@@ -34,7 +34,9 @@ apiClient.interceptors.response.use(
     }
     if (error.response) {
       if (error.response.status === 401 || error.response.status === 403) {
-        return Promise.reject(new Error('Unauthorized'));
+        return Promise.reject(
+          new Error('Не удалось подтвердить авторизацию Telegram. Откройте мини‑приложение из бота.')
+        );
       }
       return Promise.reject(error);
     }
