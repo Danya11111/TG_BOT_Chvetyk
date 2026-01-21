@@ -22,8 +22,13 @@ function App() {
       WebApp.enableClosingConfirmation();
       
       // Устанавливаем цвета приложения из темы
-      const getThemeColor = (varName: string, fallback: string) =>
-        getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+      const getThemeColor = (varName: string, fallback: `#${string}`): `#${string}` => {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        if (value && value.startsWith('#')) {
+          return value as `#${string}`;
+        }
+        return fallback;
+      };
       const bgColor = getThemeColor('--bg-main', '#FFFFFF');
       WebApp.setHeaderColor(bgColor);
       WebApp.setBackgroundColor(bgColor);
