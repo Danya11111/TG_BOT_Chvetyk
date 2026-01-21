@@ -32,38 +32,42 @@ const payloadSchema = Joi.object({
 const AUTH_TTL_SECONDS = 5 * 60;
 
 export async function telegramAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
-  const { error, value } = headerSchema.validate(req.headers, { stripUnknown: true, allowUnknown: true });
-  if (error) {
-    throw new UnauthorizedError('Missing init data');
+  try {
+    const { error, value } = headerSchema.validate(req.headers, { stripUnknown: true, allowUnknown: true });
+    if (error) {
+      return next(new UnauthorizedError('Missing init data'));
+    }
+
+    const initData = value['x-telegram-init-data'] as string;
+
+    const isValid = validateTelegramWebAppData(initData, config.telegram.botToken);
+    if (!isValid) {
+      return next(new UnauthorizedError('Invalid init data signature'));
+    }
+
+    const parsed = parseTelegramWebAppData(initData);
+    const { error: payloadError, value: validatedPayload } = payloadSchema.validate(parsed, {
+      stripUnknown: true,
+    });
+    if (payloadError) {
+      return next(new UnauthorizedError('Invalid init data payload'));
+    }
+
+    if (!isTelegramDataFresh(validatedPayload.auth_date, AUTH_TTL_SECONDS)) {
+      return next(new UnauthorizedError('Init data expired'));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req, 'user')) {
+      return next(new UnauthorizedError('User already set'));
+    }
+
+    Object.defineProperty(req, 'user', {
+      value: Object.freeze(validatedPayload.user),
+      writable: false,
+      configurable: false,
+    });
+    return next();
+  } catch (error) {
+    return next(error as Error);
   }
-
-  const initData = value['x-telegram-init-data'] as string;
-
-  const isValid = validateTelegramWebAppData(initData, config.telegram.botToken);
-  if (!isValid) {
-    throw new UnauthorizedError('Invalid init data signature');
-  }
-
-  const parsed = parseTelegramWebAppData(initData);
-  const { error: payloadError, value: validatedPayload } = payloadSchema.validate(parsed, {
-    stripUnknown: true,
-  });
-  if (payloadError) {
-    throw new UnauthorizedError('Invalid init data payload');
-  }
-
-  if (!isTelegramDataFresh(validatedPayload.auth_date, AUTH_TTL_SECONDS)) {
-    throw new UnauthorizedError('Init data expired');
-  }
-
-  if (Object.prototype.hasOwnProperty.call(req, 'user')) {
-    throw new UnauthorizedError('User already set');
-  }
-
-  Object.defineProperty(req, 'user', {
-    value: Object.freeze(validatedPayload.user),
-    writable: false,
-    configurable: false,
-  });
-  next();
 }
