@@ -83,11 +83,6 @@ const formatAddress = (address?: PaymentRequestNotification['deliveryAddress']):
 export async function notifyManagerPaymentRequest(order: PaymentRequestNotification): Promise<void> {
   try {
     const chatId = Number(config.managers.groupChatId);
-    if (!Number.isFinite(chatId)) {
-      logger.warn('Manager group chat id is not configured');
-      return;
-    }
-
     const bot = getBot();
     const itemsText = order.items
       .map(
@@ -117,8 +112,33 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
       Markup.button.callback('❌ Не оплачено', `payment_reject:${order.orderId}`),
     ]);
 
-    await bot.telegram.sendMessage(chatId, message, keyboard);
-    logger.info(`Payment request sent to manager group for order ${order.orderNumber}`);
+    const sendToManagers = async () => {
+      if (!config.managers.telegramIds.length) {
+        logger.warn('Manager telegram ids are not configured');
+        return;
+      }
+      for (const managerId of config.managers.telegramIds) {
+        try {
+          await bot.telegram.sendMessage(parseInt(managerId, 10), message, keyboard);
+        } catch (error) {
+          logger.error(`Failed to send payment request to manager ${managerId}:`, error);
+        }
+      }
+    };
+
+    if (!Number.isFinite(chatId)) {
+      logger.warn('Manager group chat id is not configured');
+      await sendToManagers();
+      return;
+    }
+
+    try {
+      await bot.telegram.sendMessage(chatId, message, keyboard);
+      logger.info(`Payment request sent to manager group for order ${order.orderNumber}`);
+    } catch (error) {
+      logger.error('Failed to send payment request to manager group:', error);
+      await sendToManagers();
+    }
   } catch (error) {
     logger.error('Failed to send payment request to managers:', error);
   }

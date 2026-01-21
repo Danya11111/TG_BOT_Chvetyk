@@ -65,7 +65,7 @@ export const config = {
     telegramIds: process.env.MANAGER_TELEGRAM_IDS 
       ? process.env.MANAGER_TELEGRAM_IDS.split(',').map(id => id.trim())
       : [],
-    groupChatId: customerData.managerGroupChatId,
+    groupChatId: process.env.MANAGER_GROUP_CHAT_ID || customerData.managerGroupChatId,
   },
 
   // Support contacts

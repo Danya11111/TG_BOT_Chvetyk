@@ -18,6 +18,7 @@ export default function CheckoutPage() {
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'confirmed' | 'rejected'>('idle');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
   const [paymentCountdown, setPaymentCountdown] = useState(15);
   const [isPaymentConfirmReady, setIsPaymentConfirmReady] = useState(false);
@@ -107,10 +108,28 @@ export default function CheckoutPage() {
     return Object.keys(newErrors).length === 0;
   }, [formData]);
 
+  const showAlert = useCallback((message: string) => {
+    try {
+      if (WebApp?.showAlert) {
+        WebApp.showAlert(message);
+        return;
+      }
+    } catch {
+      // fallback below
+    }
+    window.alert(message);
+  }, []);
+
   const handlePaymentCompleted = useCallback(async () => {
+    if (!isPaymentConfirmReady) {
+      showAlert(`Пожалуйста, подождите ${paymentCountdown} сек.`);
+      return;
+    }
+
     const isValid = validateForm();
     if (!isValid) {
-      WebApp.showAlert('Пожалуйста, заполните все обязательные поля');
+      setPaymentStep('form');
+      showAlert('Пожалуйста, заполните все обязательные поля');
       return;
     }
 
@@ -119,6 +138,7 @@ export default function CheckoutPage() {
     }
 
     setLoading(true);
+    setSubmitError(null);
     setStatusMessage(null);
 
     try {
@@ -133,26 +153,51 @@ export default function CheckoutPage() {
       clearFormData();
     } catch (error) {
       console.error('Error creating order:', error);
-      WebApp.showAlert('Произошла ошибка при оформлении заказа. Попробуйте позже.');
+      const errorMessage = 'Произошла ошибка при оформлении заказа. Попробуйте позже.';
+      setSubmitError(errorMessage);
+      showAlert(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [formData, validateForm, orderId, clearCart, clearFormData, items]);
+  }, [
+    formData,
+    validateForm,
+    orderId,
+    clearCart,
+    clearFormData,
+    items,
+    isPaymentConfirmReady,
+    paymentCountdown,
+    showAlert,
+  ]);
 
   const handleProceedToPayment = useCallback(() => {
     const isValid = validateForm();
     if (!isValid) {
-      WebApp.showAlert('Пожалуйста, заполните все обязательные поля');
+      showAlert('Пожалуйста, заполните все обязательные поля');
       return;
     }
     setPaymentStep('payment');
-  }, [validateForm]);
+  }, [validateForm, showAlert]);
+
+  const handleCopyCardNumber = useCallback(
+    async (cardNumber: string) => {
+      try {
+        await navigator.clipboard.writeText(cardNumber);
+        showAlert('Номер карты скопирован');
+      } catch (error) {
+        console.error('Failed to copy card number:', error);
+        showAlert('Не удалось скопировать номер карты');
+      }
+    },
+    [showAlert]
+  );
 
   useEffect(() => {
-    if (items.length === 0 && !orderId) {
+    if (items.length === 0 && !orderId && paymentStep === 'form' && !loading) {
       navigate('/cart', { replace: false });
     }
-  }, [items.length, orderId, navigate]);
+  }, [items.length, orderId, paymentStep, loading, navigate]);
 
   useEffect(() => {
     WebApp.MainButton.hide();
@@ -285,6 +330,7 @@ export default function CheckoutPage() {
   };
 
   const isOrderLocked = orderId !== null;
+  const isConfirmDisabled = loading || isOrderLocked;
   const sbpEnabled = Boolean(customerConfig?.sbpQr?.enabled);
   const sbpLabel = sbpEnabled
     ? 'Оплата по QR-коду СБП'
@@ -293,6 +339,14 @@ export default function CheckoutPage() {
     { value: 'card_requisites', label: 'Оплата по реквизитам карты', icon: '💳', disabled: false },
     { value: 'sbp_qr', label: sbpLabel, icon: '📱', disabled: !sbpEnabled },
   ] as const;
+  const cardRequisitesDetails = customerConfig?.cardRequisites.details || [];
+  const cardNumberLine = cardRequisitesDetails.find((line) =>
+    line.toLowerCase().includes('номер карты')
+  );
+  const cardNumberValue = cardNumberLine?.split(':').slice(1).join(':').trim();
+  const cardOtherDetails = cardNumberLine
+    ? cardRequisitesDetails.filter((line) => line !== cardNumberLine)
+    : cardRequisitesDetails;
   const deliveryZonesText = customerConfig?.delivery?.zones
     ?.map((zone) => `${zone.name} — ${zone.price}`)
     .join('; ');
@@ -917,11 +971,51 @@ export default function CheckoutPage() {
                   {customerConfig?.cardRequisites.title || 'Оплата по реквизитам карты'}
                 </div>
                 <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                  {customerConfig?.cardRequisites.details?.length
-                    ? customerConfig.cardRequisites.details.map((line) => (
+                  {cardNumberValue && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        Номер карты
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          onClick={() => handleCopyCardNumber(cardNumberValue)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            fontSize: '16px',
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {cardNumberValue}
+                        </button>
+                        <button
+                          onClick={() => handleCopyCardNumber(cardNumberValue)}
+                          aria-label="Скопировать номер карты"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(0,0,0,0.1)',
+                            backgroundColor: 'var(--bg-surface)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {cardOtherDetails.length
+                    ? cardOtherDetails.map((line) => (
                         <div key={line}>{line}</div>
                       ))
-                    : <div>Реквизиты будут добавлены позже.</div>}
+                    : !cardNumberValue && <div>Реквизиты будут добавлены позже.</div>}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {customerConfig?.cardRequisites.note || 'После оплаты нажмите кнопку ниже.'}
@@ -950,21 +1044,26 @@ export default function CheckoutPage() {
               <div style={{ marginTop: '16px' }}>
                 <button
                   onClick={handlePaymentCompleted}
-                  disabled={loading || orderId !== null || !isPaymentConfirmReady}
+                  disabled={isConfirmDisabled}
                   style={{
                     width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: 'none',
-                    backgroundColor: loading || orderId !== null || !isPaymentConfirmReady ? '#DEE2E6' : 'var(--color-accent)',
+                    backgroundColor: isConfirmDisabled || !isPaymentConfirmReady ? '#DEE2E6' : 'var(--color-accent)',
                     color: '#FFFFFF',
                     fontSize: '16px',
                     fontWeight: 600,
-                    cursor: loading || orderId !== null || !isPaymentConfirmReady ? 'not-allowed' : 'pointer'
+                    cursor: isConfirmDisabled ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {loading ? 'Отправляем...' : 'Оплата завершена'}
                 </button>
+                {submitError && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#DC3545' }}>
+                    {submitError}
+                  </div>
+                )}
                 {!isPaymentConfirmReady && (
                   <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                     Кнопка станет активна через {paymentCountdown} сек.
