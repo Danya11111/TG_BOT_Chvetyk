@@ -7,8 +7,6 @@ import {
   parseTelegramWebAppData,
   validateTelegramWebAppData,
 } from '../../utils/telegram-validator';
-import { cache } from '../../database/redis';
-import { logger } from '../../utils/logger';
 
 const headerSchema = Joi.object({
   'x-telegram-init-data': Joi.string().trim().min(10).max(4000).required(),
@@ -33,19 +31,6 @@ const payloadSchema = Joi.object({
 
 const AUTH_TTL_SECONDS = 5 * 60;
 
-async function ensureNotReplayed(hash?: string) {
-  if (!hash) {
-    return;
-  }
-
-  const cacheKey = `twa:nonce:${hash}`;
-  const exists = await cache.get<string>(cacheKey);
-  if (exists) {
-    throw new UnauthorizedError('Init data already used');
-  }
-  await cache.set(cacheKey, 'used', AUTH_TTL_SECONDS);
-}
-
 export async function telegramAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
   const { error, value } = headerSchema.validate(req.headers, { stripUnknown: true, allowUnknown: true });
   if (error) {
@@ -69,15 +54,6 @@ export async function telegramAuthMiddleware(req: Request, _res: Response, next:
 
   if (!isTelegramDataFresh(validatedPayload.auth_date, AUTH_TTL_SECONDS)) {
     throw new UnauthorizedError('Init data expired');
-  }
-
-  try {
-    await ensureNotReplayed(validatedPayload.hash);
-  } catch (err) {
-    if (err instanceof UnauthorizedError) {
-      throw err;
-    }
-    logger.error('Failed to check replay for initData', err);
   }
 
   if (Object.prototype.hasOwnProperty.call(req, 'user')) {
