@@ -29,7 +29,7 @@ const payloadSchema = Joi.object({
   query_id: Joi.string().trim().optional(),
 });
 
-const AUTH_TTL_SECONDS = 5 * 60;
+const AUTH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export async function telegramAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
   try {
