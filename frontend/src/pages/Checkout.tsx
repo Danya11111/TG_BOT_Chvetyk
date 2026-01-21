@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
+import { getTelegramInitData } from '../utils/initData';
 import { useCartStore } from '../store/cart.store';
 import { useCheckoutStore, CheckoutFormData, DeliveryAddress } from '../store/checkout.store';
 import { createOrder, getOrderStatus } from '../api/orders.api';
@@ -126,6 +127,14 @@ export default function CheckoutPage() {
       return;
     }
 
+    const initData = getTelegramInitData();
+    if (!initData) {
+      const errorMessage = 'Не удалось получить данные Telegram. Откройте mini app из бота.';
+      setSubmitError(errorMessage);
+      showAlert(errorMessage);
+      return;
+    }
+
     const isValid = validateForm();
     if (!isValid) {
       setPaymentStep('form');
@@ -153,7 +162,10 @@ export default function CheckoutPage() {
       clearFormData();
     } catch (error) {
       console.error('Error creating order:', error);
-      const errorMessage = 'Произошла ошибка при оформлении заказа. Попробуйте позже.';
+      const errorMessage =
+        (error as any)?.response?.data?.error?.message ||
+        (error as Error)?.message ||
+        'Произошла ошибка при оформлении заказа. Попробуйте позже.';
       setSubmitError(errorMessage);
       showAlert(errorMessage);
     } finally {
