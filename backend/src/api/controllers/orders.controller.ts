@@ -146,7 +146,17 @@ class OrdersController {
 
       const order = orderResult.rows[0];
 
+      const productIds = payload.items.map((item) => item.productId).filter((id) => Number.isFinite(id));
+      const existingProductsResult = productIds.length
+        ? await client.query(
+            `SELECT id FROM products WHERE id = ANY($1::int[])`,
+            [productIds]
+          )
+        : { rows: [] as Array<{ id: number }> };
+      const existingProductIds = new Set(existingProductsResult.rows.map((row) => row.id));
+
       for (const item of payload.items) {
+        const resolvedProductId = existingProductIds.has(item.productId) ? item.productId : null;
         await client.query(
           `INSERT INTO order_items (
              order_id,
@@ -159,7 +169,7 @@ class OrdersController {
            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             order.id,
-            item.productId,
+            resolvedProductId,
             item.productName,
             item.price,
             item.quantity,
