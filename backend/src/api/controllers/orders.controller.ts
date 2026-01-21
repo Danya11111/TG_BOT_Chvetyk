@@ -205,6 +205,8 @@ class OrdersController {
           customerName: payload.customer.name,
           customerPhone: payload.customer.phone,
           customerEmail: payload.customer.email || undefined,
+          customerTelegramId: telegramUser?.id,
+          customerTelegramUsername: telegramUser?.username || undefined,
           deliveryType: payload.delivery.type,
           deliveryAddress: payload.delivery.address,
           deliveryDate: payload.delivery.date,

@@ -46,6 +46,8 @@ interface PaymentRequestNotification {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerTelegramId?: number;
+  customerTelegramUsername?: string;
   deliveryType: string;
   deliveryAddress?: {
     city: string;
@@ -80,6 +82,16 @@ const formatAddress = (address?: PaymentRequestNotification['deliveryAddress']):
   return parts.join(', ');
 };
 
+const formatTelegramContact = (telegramId?: number, telegramUsername?: string): string | null => {
+  if (telegramUsername) {
+    return `@${telegramUsername}`;
+  }
+  if (telegramId) {
+    return `tg://user?id=${telegramId}`;
+  }
+  return null;
+};
+
 export async function notifyManagerPaymentRequest(order: PaymentRequestNotification): Promise<void> {
   try {
     const chatId = Number(config.managers.groupChatId);
@@ -97,6 +109,9 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
       `📦 Заказ: #${order.orderNumber}\n` +
       `👤 Клиент: ${order.customerName}\n` +
       `📱 Телефон: ${order.customerPhone}\n` +
+      `${formatTelegramContact(order.customerTelegramId, order.customerTelegramUsername)
+        ? `💬 Telegram: ${formatTelegramContact(order.customerTelegramId, order.customerTelegramUsername)}\n`
+        : ''}` +
       `${order.customerEmail ? `✉️ Email: ${order.customerEmail}\n` : ''}` +
       `🚚 Получение: ${order.deliveryType === 'delivery' ? 'Доставка' : 'Самовывоз'}\n` +
       `📍 Адрес: ${formatAddress(order.deliveryAddress)}\n` +
