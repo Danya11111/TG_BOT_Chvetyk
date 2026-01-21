@@ -1,6 +1,6 @@
 .bottom-nav {
   position: fixed;
-  bottom: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   background-color: rgba(255, 255, 255, 0.85);
