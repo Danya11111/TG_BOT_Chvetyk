@@ -177,24 +177,6 @@ class OrdersController {
 
       await client.query('COMMIT');
 
-      void notifyManagerPaymentRequest({
-        orderId: order.id,
-        orderNumber: order.order_number,
-        customerName: payload.customer.name,
-        customerPhone: payload.customer.phone,
-        customerEmail: payload.customer.email || undefined,
-        deliveryType: payload.delivery.type,
-        deliveryAddress: payload.delivery.address,
-        deliveryDate: payload.delivery.date,
-        deliveryTime: payload.delivery.time,
-        recipientName: payload.recipient.name,
-        recipientPhone: payload.recipient.phone,
-        cardText: payload.cardText,
-        comment: payload.comment || undefined,
-        total,
-        items: payload.items,
-      });
-
       res.json(
         buildSuccessResponse({
           id: order.id,
@@ -205,6 +187,26 @@ class OrdersController {
           createdAt: order.created_at,
         })
       );
+
+      setImmediate(() => {
+        void notifyManagerPaymentRequest({
+          orderId: order.id,
+          orderNumber: order.order_number,
+          customerName: payload.customer.name,
+          customerPhone: payload.customer.phone,
+          customerEmail: payload.customer.email || undefined,
+          deliveryType: payload.delivery.type,
+          deliveryAddress: payload.delivery.address,
+          deliveryDate: payload.delivery.date,
+          deliveryTime: payload.delivery.time,
+          recipientName: payload.recipient.name,
+          recipientPhone: payload.recipient.phone,
+          cardText: payload.cardText,
+          comment: payload.comment || undefined,
+          total,
+          items: payload.items,
+        });
+      });
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
