@@ -109,7 +109,8 @@ export async function handleCallback(ctx: Context): Promise<void> {
     }
 
     const groupChatId = Number(config.managers.groupChatId);
-    if (Number.isFinite(groupChatId)) {
+    const callbackChatId = Number((ctx.callbackQuery as any)?.message?.chat?.id);
+    if (Number.isFinite(groupChatId) && callbackChatId !== groupChatId) {
       await ctx.telegram.sendMessage(
         groupChatId,
         `${action === 'confirm' ? '✅ Оплата подтверждена' : '❌ Оплата не прошла'}\n` +

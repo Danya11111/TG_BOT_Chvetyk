@@ -162,7 +162,6 @@ export default function CheckoutPage() {
       setStatusMessage('Заказ оформлен. Ожидаем подтверждения оплаты.');
 
       clearCart();
-      clearFormData();
       setPaymentStep('payment');
     } catch (error) {
       console.error('Error creating order:', error);
@@ -320,6 +319,7 @@ export default function CheckoutPage() {
     { value: 'card_requisites', label: 'Оплата по реквизитам карты', icon: '💳', disabled: false },
     { value: 'sbp_qr', label: sbpLabel, icon: '📱', disabled: !sbpEnabled },
   ] as const;
+  const selectedPaymentLabel = paymentOptions.find((payment) => payment.value === formData.paymentType)?.label;
   const cardRequisitesDetails = customerConfig?.cardRequisites.details || [];
   const cardNumberLine = cardRequisitesDetails.find((line) =>
     line.toLowerCase().includes('номер карты')
@@ -939,8 +939,13 @@ export default function CheckoutPage() {
                 ))}
               </div>
             )}
+            {isOrderLocked && (
+              <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                Выбранный способ оплаты: <strong>{selectedPaymentLabel || '—'}</strong>
+              </div>
+            )}
 
-            {formData.paymentType === 'card_requisites' && !isOrderLocked && (
+            {formData.paymentType === 'card_requisites' && (
               <div style={{
                 marginTop: '16px',
                 backgroundColor: 'var(--bg-secondary)',
@@ -1004,7 +1009,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {formData.paymentType === 'sbp_qr' && !isOrderLocked && (
+            {formData.paymentType === 'sbp_qr' && (
               <div style={{
                 marginTop: '16px',
                 backgroundColor: 'var(--bg-secondary)',
@@ -1021,7 +1026,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {!isOrderLocked && (
+            {(
               <div style={{ marginTop: '16px' }}>
                 <button
                   onClick={handlePaymentCompleted}
