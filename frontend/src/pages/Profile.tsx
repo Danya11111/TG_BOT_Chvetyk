@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
+import { getOrders, OrdersListItem } from '../api/orders.api';
 import { useProfileStore } from '../store/profile.store';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
@@ -12,6 +13,9 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('addresses');
   const [address, setAddress] = useState('');
+  const [orders, setOrders] = useState<OrdersListItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
@@ -30,6 +34,40 @@ export default function ProfilePage() {
   useEffect(() => {
     WebApp.MainButton.hide();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'orders') {
+      return;
+    }
+
+    let isActive = true;
+    setOrdersLoading(true);
+    setOrdersError(null);
+
+    getOrders()
+      .then((data) => {
+        if (!isActive) {
+          return;
+        }
+        setOrders(data);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+        console.error('Failed to load orders:', error);
+        setOrdersError('Не удалось загрузить заказы. Попробуйте позже.');
+      })
+      .finally(() => {
+        if (isActive) {
+          setOrdersLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [activeTab]);
 
   const handleSaveAddress = () => {
     if (address.trim()) {
@@ -292,13 +330,67 @@ export default function ProfilePage() {
         )}
 
         {activeTab === 'orders' && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px 20px',
-            color: 'var(--text-secondary)'
-          }}>
-            <p style={{ fontSize: '16px', marginBottom: '8px' }}>Заказов пока нет</p>
-            <p style={{ fontSize: '14px' }}>Ваши заказы будут отображаться здесь</p>
+          <div>
+            {ordersLoading && (
+              <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: 'var(--text-secondary)'
+              }}>
+                Загрузка заказов...
+              </div>
+            )}
+            {ordersError && (
+              <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: '#DC3545'
+              }}>
+                {ordersError}
+              </div>
+            )}
+            {!ordersLoading && !ordersError && orders.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '40px 20px',
+                color: 'var(--text-secondary)'
+              }}>
+                <p style={{ fontSize: '16px', marginBottom: '8px' }}>Заказов пока нет</p>
+                <p style={{ fontSize: '14px' }}>Ваши заказы будут отображаться здесь</p>
+              </div>
+            )}
+            {!ordersLoading && !ordersError && orders.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {orders.map((order) => (
+                  <div
+                    key={order.id}
+                    style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid rgba(0,0,0,0.06)',
+                      color: 'var(--text-primary)'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: '6px' }}>
+                      Заказ #{order.order_number}
+                    </div>
+                    <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                      Статус: {order.status}
+                    </div>
+                    <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                      Оплата: {order.payment_status}
+                    </div>
+                    <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                      Сумма: {Number(order.total).toLocaleString('ru-RU')} ₽
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {new Date(order.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

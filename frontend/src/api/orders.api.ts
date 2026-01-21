@@ -21,6 +21,15 @@ export interface OrderStatusResponse extends CreateOrderResponse {
   }>;
 }
 
+export interface OrdersListItem {
+  id: number;
+  order_number: string;
+  total: number;
+  status: string;
+  payment_status: string;
+  created_at: string;
+}
+
 export async function createOrder(
   formData: CheckoutFormData,
   items: CartItem[]
@@ -61,4 +70,9 @@ export async function createOrder(
 export async function getOrderStatus(orderId: number): Promise<OrderStatusResponse> {
   const response = await apiClient.get(`/api/orders/${orderId}`);
   return response.data.data;
+}
+
+export async function getOrders(): Promise<OrdersListItem[]> {
+  const response = await apiClient.get('/api/orders');
+  return response.data.data.orders;
 }
