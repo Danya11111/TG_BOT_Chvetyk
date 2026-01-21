@@ -102,7 +102,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
         `💰 Сумма: ${Number(orderDetails.total).toFixed(2)} ₽\n` +
         `🕒 Время оформления: ${formattedTime}\n` +
         (action === 'confirm'
-          ? '\nСпасибо за заказ! Мы приступили к обработке.'
+          ? '\nОплата завершена, чек сформирован. Спасибо за заказ!'
           : `\nЕсли оплата была проведена, свяжитесь с менеджером: ${config.support.managerPhone}`);
 
       await ctx.telegram.sendMessage(Number(orderDetails.telegram_id), message);

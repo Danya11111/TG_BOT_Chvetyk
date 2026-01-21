@@ -21,8 +21,6 @@ export default function CheckoutPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
-  const [paymentCountdown, setPaymentCountdown] = useState(15);
-  const [isPaymentConfirmReady, setIsPaymentConfirmReady] = useState(false);
   const { config: customerConfig } = useCustomerConfig();
 
   // Загружаем сохраненные данные или используем значения по умолчанию
@@ -121,12 +119,17 @@ export default function CheckoutPage() {
     window.alert(message);
   }, []);
 
-  const handlePaymentCompleted = useCallback(async () => {
-    if (!isPaymentConfirmReady) {
-      showAlert(`Пожалуйста, подождите ${paymentCountdown} сек.`);
+  const handlePaymentCompleted = useCallback(() => {
+    if (!orderId) {
+      showAlert('Сначала оформите заказ.');
       return;
     }
+    setPaymentStatus('processing');
+    setStatusMessage('Спасибо! Оплата завершена. Если что — с вами свяжется менеджер для подтверждения заказа.');
+    showAlert('Спасибо! Оплата завершена. Если что — с вами свяжется менеджер для подтверждения заказа.');
+  }, [orderId, showAlert]);
 
+  const handleProceedToPayment = useCallback(async () => {
     const initData = getTelegramInitData();
     if (!initData) {
       const errorMessage = 'Не удалось получить данные Telegram. Откройте mini app из бота.';
@@ -137,12 +140,12 @@ export default function CheckoutPage() {
 
     const isValid = validateForm();
     if (!isValid) {
-      setPaymentStep('form');
       showAlert('Пожалуйста, заполните все обязательные поля');
       return;
     }
 
     if (orderId) {
+      setPaymentStep('payment');
       return;
     }
 
@@ -156,10 +159,11 @@ export default function CheckoutPage() {
       setOrderId(createdOrder.id);
       setOrderNumber(createdOrder.orderNumber);
       setPaymentStatus('processing');
-      setStatusMessage('Платеж обрабатывается');
+      setStatusMessage('Заказ оформлен. Ожидаем подтверждения оплаты.');
 
       clearCart();
       clearFormData();
+      setPaymentStep('payment');
     } catch (error) {
       console.error('Error creating order:', error);
       const errorMessage =
@@ -178,19 +182,8 @@ export default function CheckoutPage() {
     clearCart,
     clearFormData,
     items,
-    isPaymentConfirmReady,
-    paymentCountdown,
     showAlert,
   ]);
-
-  const handleProceedToPayment = useCallback(() => {
-    const isValid = validateForm();
-    if (!isValid) {
-      showAlert('Пожалуйста, заполните все обязательные поля');
-      return;
-    }
-    setPaymentStep('payment');
-  }, [validateForm, showAlert]);
 
   const handleCopyCardNumber = useCallback(
     async (cardNumber: string) => {
@@ -273,30 +266,6 @@ export default function CheckoutPage() {
     };
   }, [orderId, paymentStatus]);
 
-  useEffect(() => {
-    if (paymentStep !== 'payment' || orderId) {
-      setPaymentCountdown(15);
-      setIsPaymentConfirmReady(false);
-      return;
-    }
-
-    setIsPaymentConfirmReady(false);
-    setPaymentCountdown(15);
-
-    const startedAt = Date.now();
-    const intervalId = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-      const remaining = Math.max(15 - elapsed, 0);
-      setPaymentCountdown(remaining);
-      if (remaining === 0) {
-        setIsPaymentConfirmReady(true);
-        window.clearInterval(intervalId);
-      }
-    }, 250);
-
-    return () => window.clearInterval(intervalId);
-  }, [paymentStep, orderId]);
-
   const handleInputChange = (field: keyof CheckoutFormData, value: any) => {
     if (orderId) {
       return;
@@ -342,7 +311,7 @@ export default function CheckoutPage() {
   };
 
   const isOrderLocked = orderId !== null;
-  const isConfirmDisabled = loading || isOrderLocked;
+  const isConfirmDisabled = loading || !orderId;
   const sbpEnabled = Boolean(customerConfig?.sbpQr?.enabled);
   const sbpLabel = sbpEnabled
     ? 'Оплата по QR-коду СБП'
@@ -890,20 +859,20 @@ export default function CheckoutPage() {
       </div>
       <button
         onClick={handleProceedToPayment}
-        disabled={loading || isOrderLocked}
+        disabled={loading}
         style={{
           width: '100%',
           padding: '14px',
           borderRadius: '10px',
           border: 'none',
-          backgroundColor: loading || isOrderLocked ? '#DEE2E6' : 'var(--color-accent)',
+          backgroundColor: loading ? '#DEE2E6' : 'var(--color-accent)',
           color: '#FFFFFF',
           fontSize: '16px',
           fontWeight: 600,
-          cursor: loading || isOrderLocked ? 'not-allowed' : 'pointer'
+          cursor: loading ? 'not-allowed' : 'pointer'
         }}
       >
-        Перейти к оплате
+        Оформить заказ
       </button>
       </>
       )}
@@ -1062,7 +1031,7 @@ export default function CheckoutPage() {
                     padding: '12px',
                     borderRadius: '8px',
                     border: 'none',
-                    backgroundColor: isConfirmDisabled || !isPaymentConfirmReady ? '#DEE2E6' : 'var(--color-accent)',
+                    backgroundColor: isConfirmDisabled ? '#DEE2E6' : 'var(--color-accent)',
                     color: '#FFFFFF',
                     fontSize: '16px',
                     fontWeight: 600,
@@ -1074,11 +1043,6 @@ export default function CheckoutPage() {
                 {submitError && (
                   <div style={{ marginTop: '8px', fontSize: '13px', color: '#DC3545' }}>
                     {submitError}
-                  </div>
-                )}
-                {!isPaymentConfirmReady && (
-                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                    Кнопка станет активна через {paymentCountdown} сек.
                   </div>
                 )}
               </div>

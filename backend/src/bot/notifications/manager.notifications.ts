@@ -92,7 +92,8 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
       .join('\n');
 
     const message =
-      `💳 ОЖИДАНИЕ ОПЛАТЫ\n\n` +
+      `💳 ОЖИДАНИЕ ОПЛАТЫ\n` +
+      `Клиент приступил к оплате.\n\n` +
       `📦 Заказ: #${order.orderNumber}\n` +
       `👤 Клиент: ${order.customerName}\n` +
       `📱 Телефон: ${order.customerPhone}\n` +
