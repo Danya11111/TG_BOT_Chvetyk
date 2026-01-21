@@ -1,35 +1,43 @@
 :root {
   /* --- Palette --- */
-  /* Brand: White & Gold */
+  /* Brand core */
   --color-primary: #FFFFFF;
-  --color-primary-dark: #C9A33A;    /* Gold */
-  --color-primary-light: #FFF8E6;   /* Light gold */
+  --color-text: #414143;
+  --color-accent: #D795B0;
+  --color-primary-dark: #D795B0;
+  --color-primary-light: rgba(215, 149, 176, 0.12);
   
   /* Accent */
-  --color-accent: #C9A33A;          /* Gold */
-  --color-accent-light: #D9B765;
-  --color-accent-transparent: rgba(201, 163, 58, 0.12);
+  --color-accent-light: rgba(215, 149, 176, 0.18);
+  --color-accent-transparent: rgba(215, 149, 176, 0.14);
 
   /* Functional Colors */
-  --color-success: #32D74B;         /* iOS Green (Vibrant) */
-  --color-warning: #FF9F0A;         /* iOS Orange */
-  --color-error: #FF453A;           /* iOS Red */
+  --color-success: var(--color-accent);
+  --color-warning: var(--color-accent);
+  --color-error: var(--color-accent);
   --color-white: #FFFFFF;
-  --color-black: #000000;
 
   /* Backgrounds */
   --bg-main: #FFFFFF;
   --bg-surface: #FFFFFF;
-  --bg-secondary: #FFF8E6;
-  --bg-input: #FFF8E6;
-  --bg-glass: rgba(255, 255, 255, 0.95);
+  --bg-secondary: rgba(215, 149, 176, 0.08);
+  --bg-input: rgba(65, 65, 67, 0.06);
+  --bg-glass: rgba(255, 255, 255, 0.9);
+  --bg-overlay: rgba(65, 65, 67, 0.45);
 
   /* Text */
-  --text-primary: #2B2412;
-  --text-secondary: #8C7A4F;
-  --text-tertiary: #C1B08A;
+  --text-primary: var(--color-text);
+  --text-secondary: rgba(65, 65, 67, 0.72);
+  --text-tertiary: rgba(65, 65, 67, 0.5);
   --text-on-accent: #FFFFFF;
-  --text-price: #8A6B1F;
+  --text-price: var(--color-text);
+
+  /* Borders & disabled */
+  --border-light: rgba(65, 65, 67, 0.08);
+  --border-soft: rgba(65, 65, 67, 0.12);
+  --border-strong: rgba(65, 65, 67, 0.2);
+  --bg-disabled: rgba(65, 65, 67, 0.12);
+  --text-disabled: rgba(65, 65, 67, 0.5);
 
   /* --- Typography --- */
   --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -65,10 +73,11 @@
   --radius-full: 9999px;
 
   /* --- Effects --- */
-  --shadow-sm: 0 1px 4px rgba(201, 163, 58, 0.12);
-  --shadow-md: 0 6px 20px rgba(201, 163, 58, 0.16);
-  --shadow-lg: 0 12px 32px rgba(201, 163, 58, 0.2);
-  --shadow-float: 0 10px 36px rgba(201, 163, 58, 0.24);
+  --shadow-sm: 0 1px 4px rgba(215, 149, 176, 0.12);
+  --shadow-md: 0 6px 20px rgba(215, 149, 176, 0.16);
+  --shadow-lg: 0 12px 32px rgba(215, 149, 176, 0.2);
+  --shadow-float: 0 10px 36px rgba(215, 149, 176, 0.24);
+  --shadow-nav: 0 -10px 30px rgba(65, 65, 67, 0.06);
   
   --backdrop-blur: blur(20px);
   

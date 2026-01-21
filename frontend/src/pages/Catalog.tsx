@@ -7,11 +7,13 @@ import { Product } from '../types/catalog';
 import { ProductCard } from '../components/ProductCard';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import clsx from 'clsx';
 import './Catalog.css';
 
 export default function CatalogPage() {
   const navigate = useNavigate();
+  const { config } = useCustomerConfig();
 
   const {
     categories,
@@ -37,9 +39,12 @@ export default function CatalogPage() {
   } = useCatalogStore();
 
   useEffect(() => {
-    // Premium theme bg
-    WebApp.setBackgroundColor('#F9F9FB'); 
-    WebApp.setHeaderColor('#F9F9FB'); 
+    // Use theme colors for Telegram UI
+    const getThemeColor = (varName: string, fallback: string) =>
+      getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+    const bgColor = getThemeColor('--bg-main', '#FFFFFF');
+    WebApp.setBackgroundColor(bgColor);
+    WebApp.setHeaderColor(bgColor);
     
     fetchCategories();
   }, [fetchCategories]);
@@ -117,7 +122,7 @@ export default function CatalogPage() {
       <div className="catalog-error-container">
         <div className="catalog-error-content">
           <p>Не удалось загрузить товары</p>
-          <p style={{ marginTop: '6px', color: '#6C757D', fontSize: '13px' }}>
+          <p style={{ marginTop: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
             {error}
           </p>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
@@ -132,6 +137,16 @@ export default function CatalogPage() {
     <div className="catalog-page" style={{ paddingBottom: '120px' }}>
       {/* Header / Search */}
       <div className="catalog-header">
+        <div className="catalog-brand">
+          <img
+            src="/brand-logo.png"
+            alt={config?.brand?.displayName || 'FlowersStudio'}
+            className="catalog-brand__logo"
+          />
+          <div className="catalog-brand__name">
+            {config?.brand?.displayName || 'FlowersStudio'}
+          </div>
+        </div>
         <div className="search-wrapper">
           <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"></circle>

@@ -109,7 +109,7 @@ export default function ProductPage() {
         padding: '12px 16px',
         display: 'flex',
         alignItems: 'center',
-        background: 'rgba(255, 255, 255, 0.8)',
+        background: 'var(--bg-glass)',
         backdropFilter: 'blur(10px)'
       }}>
         <button 
@@ -118,7 +118,7 @@ export default function ProductPage() {
             width: '40px',
             height: '40px',
             borderRadius: '50%',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-surface)',
             boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             alignItems: 'center',
@@ -157,8 +157,8 @@ export default function ProductPage() {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '80px',
-            color: '#E0E0E0',
-            backgroundColor: '#F0F2F5'
+            color: 'var(--text-tertiary)',
+            backgroundColor: 'var(--bg-secondary)'
           }}>
             🌺
           </div>
@@ -174,7 +174,7 @@ export default function ProductPage() {
         backgroundColor: 'var(--bg-main)',
         padding: '24px 16px',
         zIndex: 2,
-        boxShadow: '0 -10px 20px rgba(0,0,0,0.05)'
+        boxShadow: 'var(--shadow-md)'
       }}>
         
         {/* Header Info */}
@@ -182,7 +182,7 @@ export default function ProductPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
             <h1 className="text-h2" style={{ lineHeight: 1.2 }}>{product.name}</h1>
             <div style={{ textAlign: 'right' }}>
-               <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--primary-color)' }}>
+               <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-accent)' }}>
                  {product.price.toLocaleString('ru-RU')} ₽
                </div>
                {product.old_price && product.old_price > product.price && (
@@ -198,7 +198,7 @@ export default function ProductPage() {
               marginTop: '8px',
               padding: '4px 12px',
               borderRadius: '20px',
-              backgroundColor: 'var(--surface-color)',
+              backgroundColor: 'var(--bg-secondary)',
               color: 'var(--text-secondary)',
               fontSize: '12px',
               fontWeight: 500,
@@ -212,7 +212,7 @@ export default function ProductPage() {
         {/* Quantity Selector */}
         {product.in_stock ? (
           <div style={{ 
-            backgroundColor: 'var(--surface-color)', 
+            backgroundColor: 'var(--bg-secondary)', 
             padding: '16px', 
             borderRadius: '16px',
             marginBottom: '24px',
@@ -247,8 +247,8 @@ export default function ProductPage() {
         ) : (
           <div style={{
             padding: '16px',
-            backgroundColor: '#FFF5F5',
-            color: 'var(--error-color)',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--color-error)',
             borderRadius: '12px',
             textAlign: 'center',
             marginBottom: '24px',
@@ -277,7 +277,7 @@ export default function ProductPage() {
            <div style={{ 
              marginTop: '32px', 
              paddingTop: '16px', 
-             borderTop: '1px solid var(--surface-secondary)' 
+             borderTop: '1px solid var(--border-light)' 
            }}>
              <p className="text-caption">Артикул: {product.article}</p>
            </div>

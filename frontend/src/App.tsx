@@ -21,9 +21,12 @@ function App() {
       WebApp.expand();
       WebApp.enableClosingConfirmation();
       
-      // Устанавливаем цвета приложения для единого стиля
-      WebApp.setHeaderColor('#FFFFFF');
-      WebApp.setBackgroundColor('#FFFFFF');
+      // Устанавливаем цвета приложения из темы
+      const getThemeColor = (varName: string, fallback: string) =>
+        getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+      const bgColor = getThemeColor('--bg-main', '#FFFFFF');
+      WebApp.setHeaderColor(bgColor);
+      WebApp.setBackgroundColor(bgColor);
       
       // Предотвращаем перезагрузку страницы при навигации
       // Используем onEvent для отслеживания изменений viewport

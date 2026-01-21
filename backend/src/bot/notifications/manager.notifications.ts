@@ -71,6 +71,17 @@ interface PaymentRequestNotification {
   }>;
 }
 
+interface PaymentReceiptNotification {
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerTelegramId?: number;
+  customerTelegramUsername?: string;
+  imageBuffer: Buffer;
+  fileName?: string;
+}
+
 const formatAddress = (address?: PaymentRequestNotification['deliveryAddress']): string => {
   if (!address) {
     return 'Самовывоз';
@@ -157,5 +168,61 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
     }
   } catch (error) {
     logger.error('Failed to send payment request to managers:', error);
+  }
+}
+
+export async function notifyManagerPaymentReceipt(
+  receipt: PaymentReceiptNotification
+): Promise<void> {
+  try {
+    const chatId = Number(config.managers.groupChatId);
+    const bot = getBot();
+    const caption =
+      `🧾 ЧЕК ПО ОПЛАТЕ\n` +
+      `Заказ: #${receipt.orderNumber}\n` +
+      `👤 Клиент: ${receipt.customerName}\n` +
+      `📱 Телефон: ${receipt.customerPhone}\n` +
+      `${formatTelegramContact(receipt.customerTelegramId, receipt.customerTelegramUsername)
+        ? `💬 Telegram: ${formatTelegramContact(receipt.customerTelegramId, receipt.customerTelegramUsername)}\n`
+        : ''}` +
+      `Проверьте оплату и подтвердите заказ.`;
+
+    const sendToManagers = async () => {
+      if (!config.managers.telegramIds.length) {
+        logger.warn('Manager telegram ids are not configured');
+        return;
+      }
+      for (const managerId of config.managers.telegramIds) {
+        try {
+          await bot.telegram.sendPhoto(
+            parseInt(managerId, 10),
+            { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
+            { caption }
+          );
+        } catch (error) {
+          logger.error(`Failed to send receipt to manager ${managerId}:`, error);
+        }
+      }
+    };
+
+    if (!Number.isFinite(chatId)) {
+      logger.warn('Manager group chat id is not configured');
+      await sendToManagers();
+      return;
+    }
+
+    try {
+      await bot.telegram.sendPhoto(
+        chatId,
+        { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
+        { caption }
+      );
+      logger.info(`Payment receipt sent to manager group for order ${receipt.orderNumber}`);
+    } catch (error) {
+      logger.error('Failed to send payment receipt to manager group:', error);
+      await sendToManagers();
+    }
+  } catch (error) {
+    logger.error('Failed to send payment receipt to managers:', error);
   }
 }

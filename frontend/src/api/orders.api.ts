@@ -76,3 +76,15 @@ export async function getOrders(): Promise<OrdersListItem[]> {
   const response = await apiClient.get('/api/orders');
   return response.data.data.orders;
 }
+
+export async function uploadReceipt(
+  orderId: number,
+  imageDataUrl: string,
+  fileName?: string | null
+): Promise<{ ok: boolean }> {
+  const response = await apiClient.post(`/api/orders/${orderId}/receipt`, {
+    imageDataUrl,
+    fileName: fileName || null,
+  });
+  return response.data.data;
+}

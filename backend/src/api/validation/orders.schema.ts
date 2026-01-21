@@ -49,3 +49,8 @@ export const createOrderSchema = Joi.object({
     .required(),
   items: Joi.array().min(1).items(orderItemSchema).required(),
 });
+
+export const uploadReceiptSchema = Joi.object({
+  imageDataUrl: Joi.string().trim().required(),
+  fileName: Joi.string().trim().max(255).allow('', null).optional(),
+});

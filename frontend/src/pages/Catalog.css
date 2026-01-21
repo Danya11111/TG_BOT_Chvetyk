@@ -8,12 +8,34 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: rgba(249, 249, 251, 0.85); /* Matches bg-main with blur */
+  background-color: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 8px var(--spacing-lg);
-  border-bottom: 1px solid rgba(0,0,0,0.03);
+  padding: 8px var(--spacing-lg) 12px;
+  border-bottom: 1px solid var(--border-light);
   transition: all 0.3s ease;
+}
+
+.catalog-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.catalog-brand__logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  background-color: var(--bg-secondary);
+  border: 1px solid rgba(215, 149, 176, 0.2);
+}
+
+.catalog-brand__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .search-wrapper {
@@ -32,7 +54,7 @@
 
 .catalog-search {
   width: 100%;
-  background-color: #EFEFF4; /* Slightly darker input bg */
+  background-color: var(--bg-input);
   border: none;
   padding: 10px 16px 10px 40px;
   border-radius: 10px;
@@ -45,7 +67,7 @@
 
 .catalog-search:focus {
   background-color: var(--bg-surface);
-  box-shadow: 0 0 0 2px var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-accent);
 }
 
 .catalog-search::placeholder {
@@ -66,7 +88,7 @@
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  border: 1px solid rgba(0,0,0,0.05);
+  border: 1px solid var(--border-light);
   background-color: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
@@ -81,7 +103,7 @@
   background-color: var(--color-accent);
   color: var(--text-on-accent);
   border-color: var(--color-accent);
-  box-shadow: 0 4px 10px rgba(42, 36, 40, 0.2);
+  box-shadow: 0 4px 10px rgba(215, 149, 176, 0.35);
 }
 
 .catalog-container {
@@ -222,8 +244,8 @@
 
 .catalog-filter-input, .catalog-filter-select {
   width: 100%;
-  background-color: #EFEFF4;
-  border: 1px solid rgba(0,0,0,0.05);
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   padding: 9px 10px;
   font-size: 14px;
@@ -232,8 +254,8 @@
 }
 
 .catalog-filter-input:focus, .catalog-filter-select:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
   background-color: var(--bg-surface);
 }
 

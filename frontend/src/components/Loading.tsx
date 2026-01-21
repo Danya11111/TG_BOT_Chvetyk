@@ -15,14 +15,14 @@ export default function Loading({ message = 'Загрузка...' }: LoadingProp
       <div style={{
         width: '40px',
         height: '40px',
-        border: '4px solid #F8F9FA',
-        borderTop: '4px solid #FF6B9D',
+        border: '4px solid var(--bg-input)',
+        borderTop: '4px solid var(--color-accent)',
         borderRadius: '50%',
         animation: 'spin 1s linear infinite'
       }} />
       <p style={{
         fontSize: '16px',
-        color: '#6C757D',
+        color: 'var(--text-secondary)',
         margin: 0
       }}>
         {message}

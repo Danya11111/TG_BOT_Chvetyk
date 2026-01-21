@@ -64,7 +64,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   z-index: 2;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .product-card__badge--sold {
@@ -88,7 +88,7 @@
   font-size: 11px;
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .scale-in {

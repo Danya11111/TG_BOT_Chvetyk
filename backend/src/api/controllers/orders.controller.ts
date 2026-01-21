@@ -3,7 +3,7 @@ import { buildSuccessResponse } from '../utils/response';
 import { NotFoundError, UnauthorizedError, ValidationError } from '../../utils/errors';
 import { db } from '../../database/connection';
 import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
-import { notifyManagerPaymentRequest } from '../../bot/notifications';
+import { notifyManagerPaymentReceipt, notifyManagerPaymentRequest } from '../../bot/notifications';
 
 interface CreateOrderPayload {
   customer: {
@@ -282,6 +282,71 @@ class OrdersController {
         items: itemsResult.rows,
       })
     );
+  }
+
+  async uploadReceipt(req: Request, res: Response): Promise<void> {
+    const telegramUser = req.user;
+    if (!telegramUser) {
+      throw new UnauthorizedError('Missing Telegram user');
+    }
+
+    const orderId = parseInt(req.params.id, 10);
+    if (Number.isNaN(orderId)) {
+      throw new ValidationError('Invalid order ID');
+    }
+
+    const { imageDataUrl, fileName } = req.body as {
+      imageDataUrl?: string;
+      fileName?: string | null;
+    };
+
+    if (!imageDataUrl) {
+      throw new ValidationError('Receipt image is required');
+    }
+
+    const match = imageDataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i);
+    if (!match) {
+      throw new ValidationError('Unsupported receipt image format');
+    }
+
+    const imageBuffer = Buffer.from(match[2], 'base64');
+    const maxSize = 4 * 1024 * 1024;
+    if (imageBuffer.length > maxSize) {
+      throw new ValidationError('Размер изображения слишком большой (до 4 МБ)');
+    }
+
+    const orderResult = await db.query(
+      `SELECT o.order_number, o.customer_name, o.customer_phone
+       FROM orders o
+       INNER JOIN users u ON o.user_id = u.id
+       WHERE o.id = $1 AND u.telegram_id = $2`,
+      [orderId, telegramUser.id]
+    );
+
+    if (!orderResult.rows.length) {
+      throw new NotFoundError('Order not found');
+    }
+
+    const order = orderResult.rows[0] as {
+      order_number: string;
+      customer_name: string;
+      customer_phone: string;
+    };
+
+    setImmediate(() => {
+      void notifyManagerPaymentReceipt({
+        orderId,
+        orderNumber: order.order_number,
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone,
+        customerTelegramId: telegramUser.id,
+        customerTelegramUsername: telegramUser.username || undefined,
+        imageBuffer,
+        fileName: fileName || undefined,
+      });
+    });
+
+    res.json(buildSuccessResponse({ ok: true }));
   }
 }
 

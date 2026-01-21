@@ -27,7 +27,7 @@ export default function AboutPage() {
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        borderBottom: '1px solid rgba(0,0,0,0.05)'
+        borderBottom: '1px solid var(--border-light)'
       }}>
         <button
           onClick={(e) => {
@@ -70,9 +70,23 @@ export default function AboutPage() {
         borderRadius: '12px',
         marginBottom: '20px'
       }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: '18px', color: '#2D1B2E' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+          <img
+            src="/brand-logo.png"
+            alt={config?.brand?.displayName || 'FlowersStudio'}
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              objectFit: 'cover',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid rgba(215, 149, 176, 0.2)'
+            }}
+          />
+          <h2 style={{ margin: 0, fontSize: '18px', color: 'var(--text-primary)' }}>
           {config?.brand?.displayName || 'Говорящие цветы'}
-        </h2>
+          </h2>
+        </div>
         <p style={{ marginBottom: '10px', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
           Цветочный сервис в {config?.delivery?.city || 'Чебоксарах'}. Собираем букеты с {config?.delivery?.workingHours || '09:00–21:00'} и доставляем в течение {config?.delivery?.avgTime || '1–2 часов'} по городу и ближайшим районам.
         </p>
@@ -82,7 +96,7 @@ export default function AboutPage() {
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Контакты</h2>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Контакты</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>
           <div><strong>Телефон:</strong> <a href={`tel:${config?.contacts?.phone || '+79603068713'}`} style={{ color: 'var(--text-primary)' }}>{config?.contacts?.phone || '8-960-306-87-13'}</a></div>
           <div><strong>Email:</strong> <a href={`mailto:${config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}`} style={{ color: 'var(--text-primary)' }}>{config?.contacts?.email || 'flowers-cheb2014@yandex.ru'}</a></div>
@@ -113,8 +127,8 @@ export default function AboutPage() {
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Доставка</h2>
-        <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(201, 163, 58, 0.3)' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Доставка</h2>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '16px', border: '1px solid var(--color-accent-transparent)' }}>
           <div style={{ marginBottom: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Стоимость по зонам ({config?.delivery?.workingHours || '09:00–21:00'}):
           </div>
@@ -141,8 +155,8 @@ export default function AboutPage() {
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Самовывоз</h2>
-        <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(0,0,0,0.06)', color: 'var(--text-primary)' }}>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Самовывоз</h2>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>
           <div style={{ marginBottom: '8px' }}><strong>Адрес:</strong> {config?.pickup?.address || 'ул. Университетская, 38 к. 3, Чебоксары, 428034'}</div>
           <div style={{ marginBottom: '8px' }}><strong>Время работы точки:</strong> {config?.pickup?.hours || '09:00–21:00'}</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
@@ -152,11 +166,11 @@ export default function AboutPage() {
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: '#2D1B2E' }}>Бонусы и оплата</h2>
+        <h2 style={{ marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Бонусы и оплата</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(201, 163, 58, 0.3)', color: 'var(--text-primary)' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px', border: '1px solid var(--color-accent-transparent)', color: 'var(--text-primary)' }}>
             <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.bonuses?.title || 'Бонусная программа'}</div>
-            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: 'var(--text-primary)', lineHeight: 1.5 }}>
               {(config?.bonuses?.rules || [
                 'Начисляем 5% от суммы заказа.',
                 'Начисление не распространяется на оплату доставки.',
@@ -169,9 +183,9 @@ export default function AboutPage() {
               ))}
             </ul>
           </div>
-          <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(0,0,0,0.06)', color: 'var(--text-primary)' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px', border: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>
             <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.payments?.title || 'Способы оплаты'}</div>
-            <ul style={{ margin: '0 0 0 16px', padding: 0, color: '#2D1B2E', lineHeight: 1.5 }}>
+            <ul style={{ margin: '0 0 0 16px', padding: 0, color: 'var(--text-primary)', lineHeight: 1.5 }}>
               {(config?.payments?.methods || [
                 'Наличные при получении.',
                 'Оплата по реквизитам карты.',

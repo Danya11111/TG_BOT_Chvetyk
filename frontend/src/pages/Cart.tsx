@@ -49,7 +49,7 @@ export default function CartPage() {
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        borderBottom: '1px solid rgba(0,0,0,0.05)'
+        borderBottom: '1px solid var(--border-light)'
       }}>
         <button
           onClick={(e) => {
@@ -207,7 +207,7 @@ export default function CartPage() {
                           height: '28px',
                           borderRadius: '6px',
                           border: 'none',
-                          backgroundColor: '#FFFFFF',
+                          backgroundColor: 'var(--bg-surface)',
                           cursor: 'pointer',
                           fontSize: '16px',
                           display: 'flex',
@@ -235,7 +235,7 @@ export default function CartPage() {
                           height: '28px',
                           borderRadius: '6px',
                           border: 'none',
-                          backgroundColor: '#FFFFFF',
+                          backgroundColor: 'var(--bg-surface)',
                           cursor: 'pointer',
                           fontSize: '16px',
                           display: 'flex',
@@ -290,7 +290,7 @@ export default function CartPage() {
               justifyContent: 'space-between',
               alignItems: 'center',
               paddingTop: '12px',
-              borderTop: '1px solid rgba(0,0,0,0.05)'
+              borderTop: '1px solid var(--border-light)'
             }}>
               <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>Итого:</span>
               <span style={{ 

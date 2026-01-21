@@ -92,7 +92,7 @@ export default function ProfilePage() {
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        borderBottom: '1px solid rgba(0,0,0,0.05)'
+        borderBottom: '1px solid var(--border-light)'
       }}>
         <button
           onClick={(e) => {
@@ -136,7 +136,7 @@ export default function ProfilePage() {
           gap: '16px',
           marginBottom: '24px',
           paddingBottom: '20px',
-          borderBottom: '1px solid #E0E0E0'
+          borderBottom: '1px solid var(--border-soft)'
         }}>
           {/* Фото профиля */}
           <div style={{
@@ -303,7 +303,7 @@ export default function ProfilePage() {
                   width: '100%',
                   padding: '12px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(0,0,0,0.08)',
+                  border: '1px solid var(--border-light)',
                   fontSize: '14px',
                   color: 'var(--text-primary)',
                   backgroundColor: 'var(--bg-surface)'
@@ -344,7 +344,7 @@ export default function ProfilePage() {
               <div style={{
                 textAlign: 'center',
                 padding: '20px',
-                color: '#DC3545'
+                color: 'var(--color-error)'
               }}>
                 {ordersError}
               </div>
@@ -368,7 +368,7 @@ export default function ProfilePage() {
                       padding: '14px',
                       borderRadius: '10px',
                       backgroundColor: 'var(--bg-secondary)',
-                      border: '1px solid rgba(0,0,0,0.06)',
+                      border: '1px solid var(--border-light)',
                       color: 'var(--text-primary)'
                     }}
                   >

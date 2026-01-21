@@ -3,16 +3,16 @@
   bottom: calc(10px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: var(--bg-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(0,0,0,0.05);
+  border-top: 1px solid var(--border-light);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom)) 0;
   display: flex;
   justify-content: space-around;
   align-items: center;
   z-index: 1000;
-  box-shadow: 0 -10px 30px rgba(0,0,0,0.02);
+  box-shadow: var(--shadow-nav);
 }
 
 .bottom-nav__item {
@@ -65,7 +65,7 @@
   right: 18px;
   width: 4px;
   height: 4px;
-  background-color: var(--color-primary-dark);
+  background-color: var(--color-accent);
   border-radius: 50%;
   opacity: 0; /* Hidden for now, can be enabled for 'notification' style */
 }

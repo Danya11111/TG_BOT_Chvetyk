@@ -29,7 +29,7 @@ export default function HomePage() {
         <h1 style={{ margin: 0, textAlign: 'center' }}>
           🌺 {config?.brand?.displayName || 'Говорящие цветы'}
         </h1>
-        <p style={{ margin: 0, textAlign: 'center', color: '#6C757D' }}>
+        <p style={{ margin: 0, textAlign: 'center', color: 'var(--text-secondary)' }}>
           {(config?.brand?.tagline || 'Заказ букетов в Чебоксарах через Telegram') +
             ` (${config?.brand?.botName || 'FlowersStudioBot'})`}
         </p>
@@ -69,10 +69,10 @@ export default function HomePage() {
       <div style={{ 
         marginTop: '40px',
         padding: '20px',
-        backgroundColor: '#F8F9FA',
+        backgroundColor: 'var(--bg-secondary)',
         borderRadius: '12px'
       }}>
-        <p style={{ fontSize: '14px', color: '#6C757D', textAlign: 'center' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center' }}>
           Каталог товаров будет доступен после интеграции с системой учёта Posiflora.
         </p>
       </div>

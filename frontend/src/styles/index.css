@@ -74,19 +74,19 @@ body {
   color: var(--text-on-accent);
   border-radius: var(--radius-lg); /* Friendlier buttons */
   padding: 12px 24px;
-  box-shadow: 0 4px 12px rgba(42, 36, 40, 0.15);
+  box-shadow: 0 4px 12px rgba(215, 149, 176, 0.25);
 }
 
 .btn-secondary {
   background-color: var(--color-primary-light);
-  color: var(--color-accent);
+  color: var(--text-primary);
   border-radius: var(--radius-lg);
   padding: 12px 24px;
 }
 
 /* Skeleton Loading - Refined */
 .skeleton {
-  background: #EFEFF4;
+  background: var(--bg-input);
   position: relative;
   overflow: hidden;
 }
