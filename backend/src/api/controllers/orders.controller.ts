@@ -177,7 +177,7 @@ class OrdersController {
 
       await client.query('COMMIT');
 
-      await notifyManagerPaymentRequest({
+      void notifyManagerPaymentRequest({
         orderId: order.id,
         orderNumber: order.order_number,
         customerName: payload.customer.name,
