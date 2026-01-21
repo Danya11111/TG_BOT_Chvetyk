@@ -108,18 +108,6 @@ export async function handleCallback(ctx: Context): Promise<void> {
       await ctx.telegram.sendMessage(Number(orderDetails.telegram_id), message);
     }
 
-    const groupChatId = Number(config.managers.groupChatId);
-    const callbackChatId = Number((ctx.callbackQuery as any)?.message?.chat?.id);
-    if (Number.isFinite(groupChatId) && callbackChatId !== groupChatId) {
-      await ctx.telegram.sendMessage(
-        groupChatId,
-        `${action === 'confirm' ? '✅ Оплата подтверждена' : '❌ Оплата не прошла'}\n` +
-          `Заказ #${updatedOrder.order_number}\n` +
-          `Менеджер: ${managerLabel}\n` +
-          `Время: ${actionTime.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
-      );
-    }
-
     if ('message' in (ctx.callbackQuery as any)) {
       const originalMessage = (ctx.callbackQuery as any).message;
       const originalText = originalMessage?.text || '';

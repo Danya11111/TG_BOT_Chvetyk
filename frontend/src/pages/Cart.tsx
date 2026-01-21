@@ -11,21 +11,11 @@ export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotal, getItemCount, clearCart } = useCartStore();
 
   useEffect(() => {
-    if (items.length > 0) {
-      const total = getTotal();
-      WebApp.MainButton.setText(`Оформить заказ - ${total.toLocaleString('ru-RU')} ₽`);
-      WebApp.MainButton.show();
-      WebApp.MainButton.onClick(() => {
-        navigate('/checkout', { replace: false });
-      });
-    } else {
-      WebApp.MainButton.hide();
-    }
-
+    WebApp.MainButton.hide();
     return () => {
       WebApp.MainButton.hide();
     };
-  }, [items, getTotal, navigate]);
+  }, []);
 
   const handleRemoveItem = (productId: number) => {
     if (window.confirm('Удалить товар из корзины?')) {
