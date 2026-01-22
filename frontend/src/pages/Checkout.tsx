@@ -28,6 +28,7 @@ export default function CheckoutPage() {
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptSent, setReceiptSent] = useState(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [showThankYouModal, setShowThankYouModal] = useState(false);
   const { config: customerConfig } = useCustomerConfig();
 
   const getMinDeliveryTime = useCallback((dateValue?: string) => {
@@ -157,8 +158,8 @@ export default function CheckoutPage() {
     }
     setPaymentStatus('processing');
     setStatusMessage('Спасибо! Оплата завершена. Если что — с вами свяжется менеджер для подтверждения заказа.');
-    showAlert('Спасибо! Оплата завершена. Если что — с вами свяжется менеджер для подтверждения заказа.');
-  }, [orderId, showAlert]);
+    setShowThankYouModal(true);
+  }, [orderId]);
 
   const handleProceedToPayment = useCallback(async () => {
     const initData = getTelegramInitData();
@@ -1357,6 +1358,165 @@ export default function CheckoutPage() {
       </div>
       <AppFooter />
       <BottomNavigation />
+
+      {/* Модальное окно благодарности */}
+      {showThankYouModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(65, 65, 67, 0.6)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px',
+            animation: 'fadeIn 0.3s ease-out'
+          }}
+          onClick={() => setShowThankYouModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderRadius: '24px',
+              padding: '32px 24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(215, 149, 176, 0.3)',
+              position: 'relative',
+              animation: 'fadeIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              transform: 'scale(1)',
+              border: '1px solid rgba(215, 149, 176, 0.2)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Иконка успеха */}
+            <div
+              style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(215, 149, 176, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 24px',
+                animation: 'fadeIn 0.5s ease-out 0.2s both'
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '48px',
+                  lineHeight: '1'
+                }}
+              >
+                🌺
+              </div>
+            </div>
+
+            {/* Заголовок */}
+            <h2
+              style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                textAlign: 'center',
+                margin: '0 0 12px',
+                letterSpacing: '-0.02em'
+              }}
+            >
+              Спасибо за заказ!
+            </h2>
+
+            {/* Текст */}
+            <p
+              style={{
+                fontSize: '15px',
+                color: 'var(--text-secondary)',
+                textAlign: 'center',
+                lineHeight: '1.6',
+                margin: '0 0 32px',
+                padding: '0 8px'
+              }}
+            >
+              После подтверждения оплаты вам придет уведомление. Мы свяжемся с вами для уточнения деталей доставки.
+            </p>
+
+            {/* Кнопка закрытия */}
+            <button
+              onClick={() => {
+                setShowThankYouModal(false);
+                navigate('/catalog');
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 24px',
+                borderRadius: '16px',
+                border: 'none',
+                backgroundColor: 'var(--color-accent)',
+                color: 'var(--text-on-accent)',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(215, 149, 176, 0.3)',
+                transition: 'all 0.2s ease',
+                letterSpacing: '-0.01em'
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.97)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(215, 149, 176, 0.25)';
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(215, 149, 176, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(215, 149, 176, 0.3)';
+              }}
+            >
+              Вернуться в каталог
+            </button>
+
+            {/* Дополнительная кнопка "Закрыть" */}
+            <button
+              onClick={() => setShowThankYouModal(false)}
+              style={{
+                width: '100%',
+                padding: '10px 24px',
+                marginTop: '12px',
+                borderRadius: '16px',
+                border: '1px solid rgba(215, 149, 176, 0.3)',
+                backgroundColor: 'transparent',
+                color: 'var(--color-accent)',
+                fontSize: '15px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.97)';
+                e.currentTarget.style.backgroundColor = 'rgba(215, 149, 176, 0.08)';
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

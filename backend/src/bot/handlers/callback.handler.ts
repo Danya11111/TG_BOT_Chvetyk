@@ -5,20 +5,34 @@ import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { logger } from '../../utils/logger';
 
 export async function handleCallback(ctx: Context): Promise<void> {
-  const callbackData = (ctx.callbackQuery as any)?.data;
-
-  if (!callbackData) {
+  const callbackQuery = ctx.callbackQuery;
+  if (!callbackQuery || !('data' in callbackQuery)) {
+    logger.warn('Callback query without data', { callbackQuery });
     await ctx.answerCbQuery('Неизвестная команда');
     return;
   }
+
+  const callbackData = callbackQuery.data as string;
+
+  if (!callbackData) {
+    logger.warn('Empty callback data', { callbackQuery });
+    await ctx.answerCbQuery('Неизвестная команда');
+    return;
+  }
+
+  logger.info('Received callback', { callbackData, from: ctx.from?.id, username: ctx.from?.username });
 
   const confirmPrefix = 'payment_confirm:';
   const rejectPrefix = 'payment_reject:';
 
   if (!callbackData.startsWith(confirmPrefix) && !callbackData.startsWith(rejectPrefix)) {
+    // Если это не наш callback, просто отвечаем и выходим
+    logger.debug('Unknown callback prefix', { callbackData });
     await ctx.answerCbQuery('Неизвестная команда');
     return;
   }
+
+  logger.info('Processing payment callback', { callbackData, action: callbackData.startsWith(confirmPrefix) ? 'confirm' : 'reject' });
 
   const action = callbackData.startsWith(confirmPrefix) ? 'confirm' : 'reject';
   const orderId = parseInt(callbackData.replace(confirmPrefix, '').replace(rejectPrefix, ''), 10);
@@ -32,22 +46,49 @@ export async function handleCallback(ctx: Context): Promise<void> {
   const actionTime = new Date();
 
   try {
-    const updateResult = await db.query(
-      `UPDATE orders
-       SET payment_status = $1,
-           status = $2,
-           ${action === 'confirm' ? 'payment_confirmed_by' : 'payment_rejected_by'} = $3,
-           ${action === 'confirm' ? 'payment_confirmed_at' : 'payment_rejected_at'} = NOW()
-       WHERE id = $4 AND payment_status = $5
-       RETURNING id, order_number, total, created_at, user_id`,
-      [
-        action === 'confirm' ? PAYMENT_STATUSES.CONFIRMED : PAYMENT_STATUSES.REJECTED,
-        action === 'confirm' ? ORDER_STATUSES.CONFIRMED : ORDER_STATUSES.CANCELLED,
+    // Используем параметризованные запросы для безопасности
+    let updateQuery: string;
+    let queryParams: any[];
+
+    if (action === 'confirm') {
+      updateQuery = `
+        UPDATE orders
+        SET payment_status = $1,
+            status = $2,
+            payment_confirmed_by = $3,
+            payment_confirmed_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $4 AND payment_status = $5
+        RETURNING id, order_number, total, created_at, user_id
+      `;
+      queryParams = [
+        PAYMENT_STATUSES.CONFIRMED,
+        ORDER_STATUSES.CONFIRMED,
         manager?.id || null,
         orderId,
         PAYMENT_STATUSES.PENDING_CONFIRMATION,
-      ]
-    );
+      ];
+    } else {
+      updateQuery = `
+        UPDATE orders
+        SET payment_status = $1,
+            status = $2,
+            payment_rejected_by = $3,
+            payment_rejected_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $4 AND payment_status = $5
+        RETURNING id, order_number, total, created_at, user_id
+      `;
+      queryParams = [
+        PAYMENT_STATUSES.REJECTED,
+        ORDER_STATUSES.CANCELLED,
+        manager?.id || null,
+        orderId,
+        PAYMENT_STATUSES.PENDING_CONFIRMATION,
+      ];
+    }
+
+    const updateResult = await db.query(updateQuery, queryParams);
 
     if (!updateResult.rows.length) {
       await ctx.answerCbQuery('Статус уже обновлён');
@@ -124,8 +165,20 @@ export async function handleCallback(ctx: Context): Promise<void> {
     }
 
     await ctx.answerCbQuery(action === 'confirm' ? 'Оплата подтверждена' : 'Отмечено как не оплачено');
+    logger.info(`Payment ${action === 'confirm' ? 'confirmed' : 'rejected'} for order ${orderId} by manager ${manager?.id}`);
   } catch (error) {
-    logger.error('Failed to handle payment callback', error);
-    await ctx.answerCbQuery('Не удалось обновить статус');
+    logger.error('Failed to handle payment callback', {
+      error,
+      callbackData,
+      orderId,
+      action,
+      managerId: manager?.id,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    try {
+      await ctx.answerCbQuery('Не удалось обновить статус. Попробуйте позже.');
+    } catch (answerError) {
+      logger.error('Failed to answer callback query', answerError);
+    }
   }
 }

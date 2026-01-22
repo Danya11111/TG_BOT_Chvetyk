@@ -29,10 +29,12 @@ export const useProfileStore = create<ProfileStore>()(
       
       updateAddress: (index, address) => {
         set((state) => {
-          const newAddresses = [...state.addresses];
-          if (index >= 0 && index < newAddresses.length) {
-            newAddresses[index] = address;
+          if (index < 0 || index >= state.addresses.length) {
+            console.warn(`Invalid address index: ${index}`);
+            return state;
           }
+          const newAddresses = [...state.addresses];
+          newAddresses[index] = { ...address };
           return { addresses: newAddresses };
         });
       },

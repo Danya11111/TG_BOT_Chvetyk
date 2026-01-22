@@ -140,22 +140,41 @@ export default function ProfilePage() {
   };
 
   const handleSaveAddress = () => {
-    if (address.street.trim() && address.house.trim()) {
-      const addressToSave = formatAddressForSave(address);
-
-      if (editingIndex !== null) {
-        updateAddress(editingIndex, addressToSave);
-        WebApp.showAlert('Адрес обновлен!');
-        setEditingIndex(null);
-      } else {
-        addAddress(addressToSave);
-        WebApp.showAlert('Адрес сохранен!');
-      }
-      
-      setAddress({ city: '', street: '', house: '', apartment: '' });
+    if (!address.street.trim() || !address.house.trim()) {
+      WebApp.showAlert('Укажите улицу и дом.');
       return;
     }
-    WebApp.showAlert('Укажите улицу и дом.');
+
+    const addressToSave = formatAddressForSave(address);
+
+    if (editingIndex !== null && editingIndex >= 0 && editingIndex < addresses.length) {
+      // Обновляем существующий адрес
+      try {
+        updateAddress(editingIndex, addressToSave);
+        // Сбрасываем состояние редактирования ПЕРЕД показом алерта
+        setEditingIndex(null);
+        setAddress({ city: '', street: '', house: '', apartment: '' });
+        // Небольшая задержка для обновления UI
+        setTimeout(() => {
+          WebApp.showAlert('Адрес обновлен!');
+        }, 100);
+      } catch (error) {
+        console.error('Error updating address:', error);
+        WebApp.showAlert('Ошибка при обновлении адреса. Попробуйте еще раз.');
+      }
+    } else {
+      // Добавляем новый адрес
+      try {
+        addAddress(addressToSave);
+        setAddress({ city: '', street: '', house: '', apartment: '' });
+        setTimeout(() => {
+          WebApp.showAlert('Адрес сохранен!');
+        }, 100);
+      } catch (error) {
+        console.error('Error adding address:', error);
+        WebApp.showAlert('Ошибка при сохранении адреса. Попробуйте еще раз.');
+      }
+    }
   };
 
   const handleEditAddress = (index: number) => {
@@ -468,58 +487,66 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div style={{ marginBottom: '20px' }}>
-                {addresses.map((addr, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '12px',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderRadius: '8px',
-                      marginBottom: '8px',
-                      color: 'var(--text-primary)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '12px'
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {formatAddress(addr)}
+                {addresses.map((addr, index) => {
+                  const addressKey = `${addr.street}-${addr.house}-${addr.apartment || ''}-${index}`;
+                  const isEditing = editingIndex === index;
+                  
+                  return (
+                    <div
+                      key={addressKey}
+                      style={{
+                        padding: '12px',
+                        backgroundColor: isEditing ? 'var(--bg-surface)' : 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        color: 'var(--text-primary)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '12px',
+                        border: isEditing ? '2px solid var(--color-accent)' : 'none'
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {formatAddress(addr)}
+                      </div>
+                      {!isEditing && (
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleEditAddress(index)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-light)',
+                              backgroundColor: 'var(--bg-surface)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAddress(index)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-light)',
+                              backgroundColor: 'var(--bg-surface)',
+                              color: '#e74c3c',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      <button
-                        onClick={() => handleEditAddress(index)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-light)',
-                          backgroundColor: 'var(--bg-surface)',
-                          color: 'var(--text-primary)',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        Изменить
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAddress(index)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-light)',
-                          backgroundColor: 'var(--bg-surface)',
-                          color: '#e74c3c',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        Удалить
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
