@@ -68,7 +68,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
 
     const currentStatus = currentStatusResult.rows[0];
     
-    // Если заказ уже подтвержден или отклонен, просто сообщаем об этом
+    // Если заказ уже в финальном статусе для этого действия, просто сообщаем
     if (action === 'confirm' && currentStatus.payment_status === PAYMENT_STATUSES.CONFIRMED) {
       await ctx.answerCbQuery('Оплата уже подтверждена');
       return;
@@ -79,9 +79,9 @@ export async function handleCallback(ctx: Context): Promise<void> {
       return;
     }
 
-    // Используем параметризованные запросы для безопасности
-    // Обновляем заказ напрямую, если он еще не в финальном статусе
-    // Это гарантирует, что кнопка работает независимо от действий клиента
+    // Обновляем заказ напрямую БЕЗ проверки статуса в WHERE
+    // Это гарантирует, что кнопка работает в любом случае, пока заказ не в финальном статусе
+    // Кнопка должна работать независимо от действий клиента
     let updateQuery: string;
     let queryParams: any[];
 
@@ -94,7 +94,6 @@ export async function handleCallback(ctx: Context): Promise<void> {
             payment_confirmed_at = NOW(),
             updated_at = NOW()
         WHERE id = $4
-          AND payment_status != $1
         RETURNING id, order_number, total, created_at, user_id
       `;
       queryParams = [
@@ -112,7 +111,6 @@ export async function handleCallback(ctx: Context): Promise<void> {
             payment_rejected_at = NOW(),
             updated_at = NOW()
         WHERE id = $4
-          AND payment_status != $1
         RETURNING id, order_number, total, created_at, user_id
       `;
       queryParams = [
@@ -123,72 +121,13 @@ export async function handleCallback(ctx: Context): Promise<void> {
       ];
     }
 
-    let updateResult = await db.query(updateQuery, queryParams);
-    let updatedOrder = updateResult.rows[0];
+    const updateResult = await db.query(updateQuery, queryParams);
+    const updatedOrder = updateResult.rows[0];
 
-    // Если обычное обновление не сработало, пытаемся принудительное обновление
     if (!updatedOrder) {
-      // Проверяем текущий статус еще раз
-      const latestStatusResult = await db.query(
-        `SELECT payment_status FROM orders WHERE id = $1`,
-        [orderId]
-      );
-      
-      if (latestStatusResult.rows.length) {
-        const latestStatus = latestStatusResult.rows[0].payment_status;
-        
-        // Если уже в финальном статусе, просто сообщаем
-        if (action === 'confirm' && latestStatus === PAYMENT_STATUSES.CONFIRMED) {
-          await ctx.answerCbQuery('Оплата уже подтверждена');
-          return;
-        }
-        
-        if (action === 'reject' && latestStatus === PAYMENT_STATUSES.REJECTED) {
-          await ctx.answerCbQuery('Оплата уже отклонена');
-          return;
-        }
-        
-        // Пытаемся принудительное обновление (без проверки статуса в WHERE)
-        // Это гарантирует, что кнопка работает независимо от действий клиента
-        logger.info('Attempting force update', { orderId, action, currentStatus: latestStatus });
-        
-        const forceUpdateQuery = action === 'confirm' ? `
-          UPDATE orders
-          SET payment_status = $1,
-              status = $2,
-              payment_confirmed_by = $3,
-              payment_confirmed_at = NOW(),
-              updated_at = NOW()
-          WHERE id = $4
-          RETURNING id, order_number, total, created_at, user_id
-        ` : `
-          UPDATE orders
-          SET payment_status = $1,
-              status = $2,
-              payment_rejected_by = $3,
-              payment_rejected_at = NOW(),
-              updated_at = NOW()
-          WHERE id = $4
-          RETURNING id, order_number, total, created_at, user_id
-        `;
-        
-        const forceParams: any[] = action === 'confirm' 
-          ? [PAYMENT_STATUSES.CONFIRMED, ORDER_STATUSES.CONFIRMED, manager?.id || null, orderId]
-          : [PAYMENT_STATUSES.REJECTED, ORDER_STATUSES.CANCELLED, manager?.id || null, orderId];
-        
-        updateResult = await db.query(forceUpdateQuery, forceParams);
-        updatedOrder = updateResult.rows[0];
-        
-        if (!updatedOrder) {
-          logger.error('Failed to force update order', { orderId, action });
-          await ctx.answerCbQuery('Не удалось обновить статус заказа');
-          return;
-        }
-      } else {
-        logger.error('Order not found', { orderId, action });
-        await ctx.answerCbQuery('Заказ не найден');
-        return;
-      }
+      logger.error('Failed to update order', { orderId, action });
+      await ctx.answerCbQuery('Не удалось обновить статус заказа');
+      return;
     }
 
     // Общий блок обработки после успешного обновления (работает для обычного и принудительного)

@@ -151,15 +151,8 @@ export default function CheckoutPage() {
     window.alert(message);
   }, []);
 
-  const handlePaymentCompleted = useCallback(() => {
-    if (!orderId) {
-      showAlert('Сначала оформите заказ.');
-      return;
-    }
-    setPaymentStatus('processing');
-    setStatusMessage('Спасибо! Оплата завершена. Если что — с вами свяжется менеджер для подтверждения заказа.');
-    setShowThankYouModal(true);
-  }, [orderId]);
+  // Функция handlePaymentCompleted удалена - клиент больше не нажимает "Оплата завершена"
+  // Клиент только загружает чек, подтверждение происходит менеджером в Telegram группе
 
   const handleProceedToPayment = useCallback(async () => {
     const initData = getTelegramInitData();
@@ -1276,37 +1269,65 @@ export default function CheckoutPage() {
                   Оплата по QR-коду СБП
                 </div>
                 <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                  {customerConfig?.sbpQr?.note || 'Отсканируйте QR и оплатите, затем нажмите кнопку ниже.'}
+                  {customerConfig?.sbpQr?.note || 'Отсканируйте QR и оплатите, затем загрузите чек об оплате.'}
+                </div>
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Загрузите чек или скриншот оплаты
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleReceiptChange(e.target.files?.[0])}
+                    disabled={receiptUploading}
+                    style={{ display: 'block', width: '100%', marginBottom: '8px' }}
+                  />
+                  {receiptPreview && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <img
+                        src={receiptPreview}
+                        alt="Чек"
+                        style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                      />
+                      {receiptFileName && (
+                        <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {receiptFileName}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleUploadReceipt}
+                    disabled={receiptUploading || !receiptPreview}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-soft)',
+                      backgroundColor: receiptUploading || !receiptPreview ? 'var(--bg-disabled)' : 'var(--bg-surface)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: receiptUploading || !receiptPreview ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {receiptUploading ? 'Отправляем чек...' : 'Отправить чек'}
+                  </button>
+                  {receiptSent && (
+                    <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Чек отправлен менеджеру.
+                    </div>
+                  )}
+                  {receiptError && (
+                    <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--color-error)' }}>
+                      {receiptError}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {(
-              <div style={{ marginTop: '16px' }}>
-                <button
-                  onClick={handlePaymentCompleted}
-                  disabled={isConfirmDisabled}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    backgroundColor: isConfirmDisabled ? 'var(--bg-disabled)' : 'var(--color-accent)',
-                    color: 'var(--text-on-accent)',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    cursor: isConfirmDisabled ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {loading ? 'Отправляем...' : 'Оплата завершена'}
-                </button>
-                {submitError && (
-                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--color-error)' }}>
-                    {submitError}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Кнопка "Оплата завершена" удалена - клиент только загружает чек */}
 
             {orderId && (
               <div style={{

@@ -359,30 +359,14 @@ class OrdersController {
       throw new NotFoundError('Order not found');
     }
 
-    // Проверка количества уже загруженных чеков (максимум 3)
-    const receiptCountResult = await db.query(
-      `SELECT COUNT(*) as count
-       FROM order_status_history
-       WHERE order_id = $1 AND status = 'receipt'`,
-      [orderId]
-    );
-    const receiptCount = parseInt(receiptCountResult.rows[0]?.count || '0', 10);
-    if (receiptCount >= 3) {
-      throw new ValidationError('Максимальное количество чеков для заказа - 3');
-    }
-
     const order = orderResult.rows[0] as {
       order_number: string;
       customer_name: string;
       customer_phone: string;
     };
 
-    await db.query(
-      `INSERT INTO order_status_history (order_id, status, comment)
-       VALUES ($1, $2, $3)`,
-      [orderId, 'receipt', 'Чек отправлен клиентом']
-    );
-
+    // Чеки не сохраняются в БД, только отправляются в Telegram группу
+    // Изображения остаются в группе Telegram
     setImmediate(() => {
       void notifyManagerPaymentReceipt({
         orderId,

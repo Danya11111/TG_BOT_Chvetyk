@@ -132,12 +132,9 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
       `${order.comment ? `📝 Комментарий: ${order.comment}\n` : ''}` +
       `\n🧾 Состав заказа:\n${itemsText}\n\n` +
       `💰 Итого: ${order.total.toFixed(2)} ₽\n\n` +
-      `После получения оплаты подтвердите статус.`;
+      `После получения чека об оплате подтвердите статус.`;
 
-    const keyboard = Markup.inlineKeyboard([
-      Markup.button.callback('✅ Подтвердить оплату', `payment_confirm:${order.orderId}`),
-      Markup.button.callback('❌ Не оплачено', `payment_reject:${order.orderId}`),
-    ]);
+    // Кнопки подтверждения только на сообщениях с чеками, не на уведомлениях об ожидании оплаты
 
     const sendToManagers = async () => {
       if (!config.managers.telegramIds.length) {
@@ -146,7 +143,7 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
       }
       for (const managerId of config.managers.telegramIds) {
         try {
-          await bot.telegram.sendMessage(parseInt(managerId, 10), message, keyboard);
+          await bot.telegram.sendMessage(parseInt(managerId, 10), message);
         } catch (error) {
           logger.error(`Failed to send payment request to manager ${managerId}:`, error);
         }
@@ -160,7 +157,7 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
     }
 
     try {
-      await bot.telegram.sendMessage(chatId, message, keyboard);
+      await bot.telegram.sendMessage(chatId, message);
       logger.info(`Payment request sent to manager group for order ${order.orderNumber}`);
     } catch (error) {
       logger.error('Failed to send payment request to manager group:', error);
