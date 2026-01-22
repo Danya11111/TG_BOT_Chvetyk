@@ -71,22 +71,61 @@ async function startServer(): Promise<void> {
     try {
       await startBot();
       
-      // Периодическая проверка webhook (каждые 5 минут)
+      // Периодическая проверка webhook (каждые 2 минуты для более быстрого восстановления)
       setInterval(async () => {
         try {
           const { getBot } = await import('./bot/bot');
           const bot = getBot();
           const webhookInfo = await bot.telegram.getWebhookInfo();
-          if (!webhookInfo.url && config.apiUrl) {
-            logger.warn('Webhook was removed, re-setting...');
-            const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
-            await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: false });
-            logger.info('✅ Webhook re-set:', { url: webhookUrl });
+          const expectedWebhookUrl = `${config.apiUrl}/api/telegram/webhook`;
+          
+          if (!webhookInfo.url || webhookInfo.url !== expectedWebhookUrl) {
+            logger.warn('Webhook was removed or changed, re-setting...', {
+              currentUrl: webhookInfo.url || '(empty)',
+              expectedUrl: expectedWebhookUrl,
+            });
+            
+            try {
+              // Очищаем старый webhook
+              await bot.telegram.deleteWebhook({ drop_pending_updates: false });
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Устанавливаем новый
+              const setResult = await bot.telegram.setWebhook(expectedWebhookUrl, {
+                drop_pending_updates: false,
+                allowed_updates: ['message', 'callback_query', 'inline_query', 'chosen_inline_result'],
+              });
+              
+              logger.info('✅ Webhook re-set:', { 
+                url: expectedWebhookUrl,
+                result: setResult,
+              });
+              
+              // Проверяем через 3 секунды
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const verifyInfo = await bot.telegram.getWebhookInfo();
+              if (verifyInfo.url === expectedWebhookUrl) {
+                logger.info('✅ Webhook verified after re-set');
+              } else {
+                logger.warn('⚠️ Webhook re-set but verification failed:', {
+                  expected: expectedWebhookUrl,
+                  actual: verifyInfo.url,
+                });
+              }
+            } catch (setError: any) {
+              logger.error('Failed to re-set webhook:', {
+                errorMessage: setError?.message,
+                errorCode: setError?.response?.error_code,
+                errorDescription: setError?.response?.description,
+              });
+            }
+          } else {
+            logger.debug('Webhook is correctly set:', { url: webhookInfo.url });
           }
         } catch (error) {
           logger.debug('Webhook check failed:', error);
         }
-      }, 5 * 60 * 1000); // Каждые 5 минут
+      }, 2 * 60 * 1000); // Каждые 2 минуты для более быстрого восстановления
     } catch (error) {
       logger.error('Failed to start Telegram Bot:', error);
       logger.warn('Continuing without bot...');

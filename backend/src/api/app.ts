@@ -74,27 +74,37 @@ export function createApp(): Express {
     })
   );
 
+  // GET endpoint для проверки доступности webhook (Telegram может проверять через GET)
+  app.get('/api/telegram/webhook', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Webhook endpoint is active' });
+  });
+
   // Telegram Webhook endpoint (для fallback, если polling не работает)
   // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
   app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const { logger } = await import('../utils/logger');
     
     // Отвечаем сразу, чтобы Telegram знал, что endpoint работает
-    // Обработку делаем асинхронно
+    // Это критически важно - Telegram удаляет webhook, если не получает быстрый ответ
     res.status(200).send('OK');
     
     try {
+      const userAgent = req.headers['user-agent'] || '';
+      const isTelegramRequest = userAgent.includes('TelegramBot') || userAgent.includes('curl');
+      
       logger.info('📥 Webhook request received', {
         contentType: req.headers['content-type'],
         bodySize: req.body?.length || 0,
         hasBody: !!req.body,
-        userAgent: req.headers['user-agent'],
-        ip: req.ip || req.connection.remoteAddress,
+        userAgent: userAgent,
+        ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
+        isTelegramRequest,
       });
       
+      // Если тело пустое, это может быть тестовый запрос от Telegram
       if (!req.body || req.body.length === 0) {
-        logger.warn('Empty webhook body received');
-        return;
+        logger.info('Empty webhook body received (possibly Telegram test request)');
+        return; // Уже ответили OK, этого достаточно
       }
       
       const { getBot } = await import('../bot/bot');
@@ -103,13 +113,20 @@ export function createApp(): Express {
       // Парсим JSON из raw body
       let update;
       try {
-        update = JSON.parse(req.body.toString());
+        const bodyString = req.body.toString();
+        update = JSON.parse(bodyString);
       } catch (parseError) {
         logger.error('Failed to parse webhook body:', {
           error: parseError,
           bodyPreview: req.body?.toString().substring(0, 500),
         });
-        return;
+        return; // Уже ответили OK
+      }
+      
+      // Проверяем, что это валидный update от Telegram
+      if (!update || typeof update !== 'object') {
+        logger.warn('Invalid update format received');
+        return; // Уже ответили OK
       }
       
       logger.info('📥 Processing webhook update', {
@@ -123,6 +140,7 @@ export function createApp(): Express {
       });
       
       // Обрабатываем update асинхронно (не блокируем ответ)
+      // Важно: не ждем завершения обработки, чтобы не задерживать ответ
       bot.handleUpdate(update).catch((handleError) => {
         logger.error('Error handling webhook update:', {
           error: handleError,
