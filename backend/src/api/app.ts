@@ -78,29 +78,61 @@ export function createApp(): Express {
   // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
   app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const { logger } = await import('../utils/logger');
+    
+    // Отвечаем сразу, чтобы Telegram знал, что endpoint работает
+    // Обработку делаем асинхронно
+    res.status(200).send('OK');
+    
     try {
       logger.info('📥 Webhook request received', {
         contentType: req.headers['content-type'],
         bodySize: req.body?.length || 0,
         hasBody: !!req.body,
+        userAgent: req.headers['user-agent'],
+        ip: req.ip || req.connection.remoteAddress,
       });
+      
+      if (!req.body || req.body.length === 0) {
+        logger.warn('Empty webhook body received');
+        return;
+      }
       
       const { getBot } = await import('../bot/bot');
       const bot = getBot();
       
       // Парсим JSON из raw body
-      const update = JSON.parse(req.body.toString());
+      let update;
+      try {
+        update = JSON.parse(req.body.toString());
+      } catch (parseError) {
+        logger.error('Failed to parse webhook body:', {
+          error: parseError,
+          bodyPreview: req.body?.toString().substring(0, 500),
+        });
+        return;
+      }
+      
       logger.info('📥 Processing webhook update', {
         updateId: update.update_id,
         hasCallbackQuery: !!update.callback_query,
         callbackData: update.callback_query?.data,
         messageId: update.callback_query?.message?.message_id,
         chatId: update.callback_query?.message?.chat?.id,
+        hasMessage: !!update.message,
+        messageType: update.message?.text ? 'text' : update.message?.photo ? 'photo' : 'other',
       });
       
-      await bot.handleUpdate(update);
-      logger.info('✅ Webhook update processed successfully', { updateId: update.update_id });
-      res.status(200).send('OK');
+      // Обрабатываем update асинхронно (не блокируем ответ)
+      bot.handleUpdate(update).catch((handleError) => {
+        logger.error('Error handling webhook update:', {
+          error: handleError,
+          errorMessage: handleError instanceof Error ? handleError.message : String(handleError),
+          stack: handleError instanceof Error ? handleError.stack : undefined,
+          updateId: update?.update_id,
+        });
+      });
+      
+      logger.info('✅ Webhook update queued for processing', { updateId: update.update_id });
     } catch (error) {
       logger.error('❌ Webhook error:', {
         error,
@@ -108,7 +140,7 @@ export function createApp(): Express {
         stack: error instanceof Error ? error.stack : undefined,
         bodyPreview: req.body?.toString().substring(0, 200),
       });
-      res.status(200).send('OK'); // Всегда отвечаем OK, чтобы Telegram не повторял запрос
+      // Ответ уже отправлен, просто логируем ошибку
     }
   });
 
