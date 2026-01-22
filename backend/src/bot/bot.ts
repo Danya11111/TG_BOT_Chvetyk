@@ -82,25 +82,45 @@ export async function startBot(): Promise<void> {
     if (is409Error) {
       logger.warn('Bot conflict detected (409), attempting to resolve...');
       
-      try {
-        // Очищаем webhook еще раз
-        await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-        logger.info('Webhook cleared during conflict resolution');
-        
-        // Ждем больше времени перед повторной попыткой
-        logger.info('Waiting 5 seconds before retry...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Пробуем запустить снова
-        logger.info('Retrying bot launch...');
-        await botInstance.launch();
-        logger.info('🚀 Telegram Bot started after conflict resolution');
-      } catch (retryError: any) {
-        logger.error('Failed to start bot after conflict resolution:', {
-          errorMessage: retryError?.message,
-          errorCode: retryError?.response?.error_code,
-          errorDescription: retryError?.response?.description,
-        });
+      // Пробуем несколько раз с увеличивающейся задержкой
+      let retrySuccess = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          // Очищаем webhook еще раз
+          await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+          logger.info(`Webhook cleared during conflict resolution (attempt ${attempt}/3)`);
+          
+          // Ждем с увеличивающейся задержкой: 10, 20, 30 секунд
+          const waitTime = attempt * 10;
+          logger.info(`Waiting ${waitTime} seconds before retry (attempt ${attempt}/3)...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          
+          // Пробуем запустить снова
+          logger.info(`Retrying bot launch (attempt ${attempt}/3)...`);
+          await botInstance.launch();
+          logger.info('🚀 Telegram Bot started after conflict resolution');
+          retrySuccess = true;
+          break;
+        } catch (retryError: any) {
+          logger.warn(`Bot launch retry ${attempt}/3 failed:`, {
+            errorMessage: retryError?.message,
+            errorCode: retryError?.response?.error_code,
+            errorDescription: retryError?.response?.description,
+          });
+          
+          if (attempt === 3) {
+            logger.error('Failed to start bot after 3 retry attempts:', {
+              errorMessage: retryError?.message,
+              errorCode: retryError?.response?.error_code,
+              errorDescription: retryError?.response?.description,
+            });
+            logger.warn('⚠️ Bot will not be available. Another bot instance is likely running elsewhere.');
+            logger.warn('⚠️ Check for other servers/containers using the same bot token.');
+          }
+        }
+      }
+      
+      if (!retrySuccess) {
         // Не бросаем ошибку, чтобы сервер продолжал работать
         logger.warn('Bot will not be available, but server continues running');
       }
