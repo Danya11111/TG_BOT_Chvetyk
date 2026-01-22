@@ -507,40 +507,84 @@ export default function ProfilePage() {
                         border: isEditing ? '2px solid var(--color-accent)' : 'none'
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
                         {formatAddress(addr)}
                       </div>
                       {!isEditing && (
-                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          gap: '6px', 
+                          flexShrink: 0,
+                          alignItems: 'center'
+                        }}>
                           <button
                             onClick={() => handleEditAddress(index)}
                             style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
+                              width: '36px',
+                              height: '36px',
+                              padding: 0,
+                              borderRadius: '8px',
                               border: '1px solid var(--border-light)',
                               backgroundColor: 'var(--bg-surface)',
                               color: 'var(--text-primary)',
-                              fontSize: '12px',
+                              fontSize: '18px',
                               cursor: 'pointer',
-                              whiteSpace: 'nowrap'
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s ease',
+                              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
                             }}
+                            onMouseDown={(e) => {
+                              e.currentTarget.style.transform = 'scale(0.95)';
+                              e.currentTarget.style.backgroundColor = 'rgba(215, 149, 176, 0.1)';
+                            }}
+                            onMouseUp={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                            }}
+                            title="Изменить адрес"
                           >
-                            Изменить
+                            ✏️
                           </button>
                           <button
                             onClick={() => handleDeleteAddress(index)}
                             style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              border: '1px solid var(--border-light)',
+                              width: '36px',
+                              height: '36px',
+                              padding: 0,
+                              borderRadius: '8px',
+                              border: '1px solid rgba(231, 76, 60, 0.3)',
                               backgroundColor: 'var(--bg-surface)',
                               color: '#e74c3c',
-                              fontSize: '12px',
+                              fontSize: '18px',
                               cursor: 'pointer',
-                              whiteSpace: 'nowrap'
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s ease',
+                              boxShadow: '0 1px 3px rgba(231, 76, 60, 0.15)'
                             }}
+                            onMouseDown={(e) => {
+                              e.currentTarget.style.transform = 'scale(0.95)';
+                              e.currentTarget.style.backgroundColor = 'rgba(231, 76, 60, 0.1)';
+                            }}
+                            onMouseUp={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                            }}
+                            title="Удалить адрес"
                           >
-                            Удалить
+                            🗑️
                           </button>
                         </div>
                       )}

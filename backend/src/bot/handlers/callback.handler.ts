@@ -32,11 +32,19 @@ export async function handleCallback(ctx: Context): Promise<void> {
     return;
   }
 
-  logger.info('Processing payment callback', { callbackData, action: callbackData.startsWith(confirmPrefix) ? 'confirm' : 'reject' });
+  logger.info('Processing payment callback', { 
+    callbackData, 
+    action: callbackData.startsWith(confirmPrefix) ? 'confirm' : 'reject',
+    from: ctx.from?.id,
+    username: ctx.from?.username,
+    messageId: (ctx.callbackQuery as any)?.message?.message_id,
+    chatId: (ctx.callbackQuery as any)?.message?.chat?.id
+  });
 
   const action = callbackData.startsWith(confirmPrefix) ? 'confirm' : 'reject';
   const orderId = parseInt(callbackData.replace(confirmPrefix, '').replace(rejectPrefix, ''), 10);
   if (Number.isNaN(orderId)) {
+    logger.warn('Invalid order ID in callback', { callbackData, orderId });
     await ctx.answerCbQuery('Некорректный заказ');
     return;
   }
@@ -91,7 +99,24 @@ export async function handleCallback(ctx: Context): Promise<void> {
     const updateResult = await db.query(updateQuery, queryParams);
 
     if (!updateResult.rows.length) {
-      await ctx.answerCbQuery('Статус уже обновлён');
+      // Проверяем текущий статус заказа, чтобы дать более информативный ответ
+      const currentStatusResult = await db.query(
+        `SELECT payment_status, status FROM orders WHERE id = $1`,
+        [orderId]
+      );
+      
+      if (currentStatusResult.rows.length) {
+        const currentStatus = currentStatusResult.rows[0];
+        if (currentStatus.payment_status === PAYMENT_STATUSES.CONFIRMED) {
+          await ctx.answerCbQuery('Оплата уже подтверждена');
+        } else if (currentStatus.payment_status === PAYMENT_STATUSES.REJECTED) {
+          await ctx.answerCbQuery('Оплата уже отклонена');
+        } else {
+          await ctx.answerCbQuery('Статус уже обновлён');
+        }
+      } else {
+        await ctx.answerCbQuery('Заказ не найден');
+      }
       return;
     }
 

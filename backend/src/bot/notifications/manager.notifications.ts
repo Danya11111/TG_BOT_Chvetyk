@@ -187,6 +187,12 @@ export async function notifyManagerPaymentReceipt(
         : ''}` +
       `Проверьте оплату и подтвердите заказ.`;
 
+    // Добавляем кнопки подтверждения оплаты к сообщению с чеком
+    const keyboard = Markup.inlineKeyboard([
+      Markup.button.callback('✅ Подтвердить оплату', `payment_confirm:${receipt.orderId}`),
+      Markup.button.callback('❌ Не оплачено', `payment_reject:${receipt.orderId}`),
+    ]);
+
     const sendToManagers = async () => {
       if (!config.managers.telegramIds.length) {
         logger.warn('Manager telegram ids are not configured');
@@ -197,7 +203,7 @@ export async function notifyManagerPaymentReceipt(
           await bot.telegram.sendPhoto(
             parseInt(managerId, 10),
             { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
-            { caption }
+            { caption, ...keyboard }
           );
         } catch (error) {
           logger.error(`Failed to send receipt to manager ${managerId}:`, error);
@@ -215,7 +221,7 @@ export async function notifyManagerPaymentReceipt(
       await bot.telegram.sendPhoto(
         chatId,
         { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
-        { caption }
+        { caption, ...keyboard }
       );
       logger.info(`Payment receipt sent to manager group for order ${receipt.orderNumber}`);
     } catch (error) {
