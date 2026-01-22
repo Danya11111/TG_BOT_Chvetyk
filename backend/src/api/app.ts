@@ -76,34 +76,48 @@ export function createApp(): Express {
 
   // GET endpoint для проверки доступности webhook (Telegram может проверять через GET)
   app.get('/api/telegram/webhook', (req, res) => {
+    const { logger } = require('../utils/logger');
+    logger.info('🔍 GET webhook check request', {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
+    });
     res.status(200).json({ status: 'ok', message: 'Webhook endpoint is active' });
   });
 
   // Telegram Webhook endpoint (для fallback, если polling не работает)
   // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
   app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const startTime = Date.now();
     const { logger } = await import('../utils/logger');
     
     // Отвечаем сразу, чтобы Telegram знал, что endpoint работает
     // Это критически важно - Telegram удаляет webhook, если не получает быстрый ответ
     res.status(200).send('OK');
+    const responseTime = Date.now() - startTime;
     
     try {
       const userAgent = req.headers['user-agent'] || '';
-      const isTelegramRequest = userAgent.includes('TelegramBot') || userAgent.includes('curl');
+      const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+      const isTelegramRequest = userAgent.includes('TelegramBot') || userAgent.includes('Telegram') || !userAgent;
       
       logger.info('📥 Webhook request received', {
         contentType: req.headers['content-type'],
         bodySize: req.body?.length || 0,
         hasBody: !!req.body,
-        userAgent: userAgent,
-        ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
+        userAgent: userAgent || '(empty)',
+        ip: ip,
         isTelegramRequest,
+        responseTimeMs: responseTime,
+        method: req.method,
+        headers: {
+          'x-forwarded-for': req.headers['x-forwarded-for'],
+          'x-real-ip': req.headers['x-real-ip'],
+        },
       });
       
       // Если тело пустое, это может быть тестовый запрос от Telegram
       if (!req.body || req.body.length === 0) {
-        logger.info('Empty webhook body received (possibly Telegram test request)');
+        logger.info('✅ Empty webhook body received (Telegram test request) - responded OK');
         return; // Уже ответили OK, этого достаточно
       }
       
@@ -116,16 +130,21 @@ export function createApp(): Express {
         const bodyString = req.body.toString();
         update = JSON.parse(bodyString);
       } catch (parseError) {
-        logger.error('Failed to parse webhook body:', {
+        logger.error('❌ Failed to parse webhook body:', {
           error: parseError,
           bodyPreview: req.body?.toString().substring(0, 500),
+          bodyLength: req.body?.length,
         });
         return; // Уже ответили OK
       }
       
       // Проверяем, что это валидный update от Telegram
-      if (!update || typeof update !== 'object') {
-        logger.warn('Invalid update format received');
+      if (!update || typeof update !== 'object' || !update.update_id) {
+        logger.warn('⚠️ Invalid update format received', {
+          hasUpdate: !!update,
+          updateType: typeof update,
+          updateId: update?.update_id,
+        });
         return; // Уже ответили OK
       }
       
@@ -137,12 +156,14 @@ export function createApp(): Express {
         chatId: update.callback_query?.message?.chat?.id,
         hasMessage: !!update.message,
         messageType: update.message?.text ? 'text' : update.message?.photo ? 'photo' : 'other',
+        fromId: update.callback_query?.from?.id || update.message?.from?.id,
+        username: update.callback_query?.from?.username || update.message?.from?.username,
       });
       
       // Обрабатываем update асинхронно (не блокируем ответ)
       // Важно: не ждем завершения обработки, чтобы не задерживать ответ
       bot.handleUpdate(update).catch((handleError) => {
-        logger.error('Error handling webhook update:', {
+        logger.error('❌ Error handling webhook update:', {
           error: handleError,
           errorMessage: handleError instanceof Error ? handleError.message : String(handleError),
           stack: handleError instanceof Error ? handleError.stack : undefined,
@@ -150,13 +171,17 @@ export function createApp(): Express {
         });
       });
       
-      logger.info('✅ Webhook update queued for processing', { updateId: update.update_id });
+      logger.info('✅ Webhook update queued for processing', { 
+        updateId: update.update_id,
+        totalResponseTimeMs: Date.now() - startTime,
+      });
     } catch (error) {
       logger.error('❌ Webhook error:', {
         error,
         errorMessage: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         bodyPreview: req.body?.toString().substring(0, 200),
+        responseTimeMs: Date.now() - startTime,
       });
       // Ответ уже отправлен, просто логируем ошибку
     }
