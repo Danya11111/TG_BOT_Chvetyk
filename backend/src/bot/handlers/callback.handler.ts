@@ -125,7 +125,23 @@ export async function handleCallback(ctx: Context): Promise<void> {
     const updatedOrder = updateResult.rows[0];
 
     if (!updatedOrder) {
-      logger.error('Failed to update order', { orderId, action });
+      logger.error('Failed to update order', { orderId, action, updateResult });
+      // Проверяем еще раз статус заказа
+      const recheckResult = await db.query(
+        `SELECT payment_status FROM orders WHERE id = $1`,
+        [orderId]
+      );
+      if (recheckResult.rows.length) {
+        const currentPaymentStatus = recheckResult.rows[0].payment_status;
+        if (action === 'confirm' && currentPaymentStatus === PAYMENT_STATUSES.CONFIRMED) {
+          await ctx.answerCbQuery('Оплата уже подтверждена');
+          return;
+        }
+        if (action === 'reject' && currentPaymentStatus === PAYMENT_STATUSES.REJECTED) {
+          await ctx.answerCbQuery('Оплата уже отклонена');
+          return;
+        }
+      }
       await ctx.answerCbQuery('Не удалось обновить статус заказа');
       return;
     }
@@ -222,10 +238,26 @@ export async function handleCallback(ctx: Context): Promise<void> {
       managerId: manager?.id,
       stack: error instanceof Error ? error.stack : undefined,
     });
+    
+    // ВАЖНО: Всегда отвечаем на callback query, даже при ошибке
     try {
       await ctx.answerCbQuery('Не удалось обновить статус. Попробуйте позже.');
     } catch (answerError) {
       logger.error('Failed to answer callback query', answerError);
+      // Если не удалось ответить через answerCbQuery, пробуем через editMessageText
+      try {
+        if ('message' in (ctx.callbackQuery as any)) {
+          const originalMessage = (ctx.callbackQuery as any).message;
+          if (originalMessage) {
+            await ctx.telegram.sendMessage(
+              originalMessage.chat.id,
+              '❌ Произошла ошибка при обработке. Попробуйте позже.'
+            );
+          }
+        }
+      } catch (sendError) {
+        logger.error('Failed to send error message', sendError);
+      }
     }
   }
 }

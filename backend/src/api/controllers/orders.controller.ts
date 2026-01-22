@@ -242,7 +242,16 @@ class OrdersController {
       [telegramUser.id]
     );
 
-    res.json(buildSuccessResponse({ orders: ordersResult.rows }));
+    res.json(buildSuccessResponse({ 
+      orders: ordersResult.rows.map(order => ({
+        id: order.id,
+        order_number: order.order_number,
+        total: Number(order.total),
+        status: order.status,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+      }))
+    }));
   }
 
   async getById(req: Request, res: Response): Promise<void> {
@@ -298,11 +307,48 @@ class OrdersController {
       [orderId]
     );
 
+    const order = orderResult.rows[0];
+    
+    // Парсим delivery_address если это JSON строка
+    let deliveryAddress = order.delivery_address;
+    if (typeof deliveryAddress === 'string') {
+      try {
+        deliveryAddress = JSON.parse(deliveryAddress);
+      } catch (e) {
+        // Если не JSON, оставляем как есть
+        deliveryAddress = null;
+      }
+    }
+
     res.json(
       buildSuccessResponse({
-        ...orderResult.rows[0],
-        items: itemsResult.rows,
-        history: historyResult.rows,
+        id: order.id,
+        order_number: order.order_number,
+        total: Number(order.total),
+        status: order.status,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+        delivery_type: order.delivery_type,
+        delivery_address: deliveryAddress,
+        delivery_date: order.delivery_date,
+        delivery_time: order.delivery_time,
+        payment_type: order.payment_type,
+        comment: order.comment,
+        recipient_name: order.recipient_name,
+        recipient_phone: order.recipient_phone,
+        card_text: order.card_text,
+        items: itemsResult.rows.map(item => ({
+          product_name: item.product_name,
+          product_price: Number(item.product_price),
+          quantity: item.quantity,
+          total: Number(item.total),
+          product_image: item.product_image,
+        })),
+        history: historyResult.rows.map(entry => ({
+          status: entry.status,
+          comment: entry.comment,
+          changed_at: entry.changed_at,
+        })),
       })
     );
   }

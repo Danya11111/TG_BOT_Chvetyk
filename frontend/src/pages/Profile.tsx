@@ -811,7 +811,7 @@ export default function ProfilePage() {
                         {orderDetailsLoading[order.id] && (
                           <div style={{ color: 'var(--text-secondary)' }}>Загрузка деталей...</div>
                         )}
-                        {orderDetails[order.id] && (
+                        {orderDetails[order.id] && orderDetails[order.id].items && (
                           <>
                             <div style={{ marginBottom: '8px' }}>
                               <div>Оплата: {getPaymentTypeLabel(orderDetails[order.id].payment_type)}</div>
@@ -850,11 +850,15 @@ export default function ProfilePage() {
                             <div style={{ marginBottom: '8px' }}>
                               <strong>Состав заказа:</strong>
                               <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                {orderDetails[order.id].items.map((item, idx) => (
-                                  <div key={`${item.product_name}-${idx}`}>
-                                    {item.product_name} × {item.quantity} = {Number(item.total).toLocaleString('ru-RU')} ₽
-                                  </div>
-                                ))}
+                                {orderDetails[order.id].items && orderDetails[order.id].items.length > 0 ? (
+                                  orderDetails[order.id].items.map((item, idx) => (
+                                    <div key={`${item.product_name}-${idx}`}>
+                                      {item.product_name} × {item.quantity} = {Number(item.total).toLocaleString('ru-RU')} ₽
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div style={{ color: 'var(--text-secondary)' }}>Нет данных о товарах</div>
+                                )}
                               </div>
                             </div>
                             {orderDetails[order.id].history?.length ? (
