@@ -13,6 +13,15 @@ const poolConfig: PoolConfig = {
   connectionTimeoutMillis: 2000,
 };
 
+// Логируем параметры подключения (без пароля) для диагностики
+logger.info('Database connection config', {
+  host: poolConfig.host,
+  port: poolConfig.port,
+  user: poolConfig.user,
+  database: poolConfig.database,
+  dbNameFromEnv: process.env.DB_NAME,
+});
+
 export const pool = new Pool(poolConfig);
 
 // Экспорт db для удобства использования
@@ -21,7 +30,17 @@ export const db = pool;
 // Обработка ошибок подключения
 pool.on('error', (err) => {
   logger.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  // Не завершаем процесс сразу, только логируем ошибку
+  // process.exit(-1);
+});
+
+// Логируем успешное создание пула
+pool.on('connect', (client) => {
+  logger.debug('New database client connected', {
+    database: poolConfig.database,
+    totalCount: pool.totalCount,
+    idleCount: pool.idleCount,
+  });
 });
 
 // Тест подключения

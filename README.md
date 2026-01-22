@@ -46,7 +46,7 @@ Telegram-бот с мини-приложением для автоматизац
 2. **Запуск всех сервисов**
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
    Это запустит:
@@ -59,10 +59,10 @@ Telegram-бот с мини-приложением для автоматизац
 
    ```bash
    # Применение миграций схемы
-   docker-compose exec backend npm run migrate
+   docker compose exec backend npm run migrate
    
    # Загрузка тестовых данных (опционально)
-   docker-compose exec backend npm run seed
+   docker compose exec backend npm run seed
    ```
 
 4. **Проверка работы**
@@ -76,21 +76,33 @@ Telegram-бот с мини-приложением для автоматизац
 4. **Остановка**
 
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 5. **Просмотр логов**
 
    ```bash
-   # Все сервисы
-   docker-compose logs -f
+   # Все сервисы (последние 100 строк)
+   docker compose logs --tail=100
 
-   # Только backend
-   docker-compose logs -f backend
+   # Только backend (в реальном времени)
+   docker compose logs -f backend
 
-   # Только frontend
-   docker-compose logs -f frontend
+   # Только backend (последние 200 строк)
+   docker compose logs --tail=200 backend
+
+   # Поиск проблем с callback (кнопки подтверждения)
+   docker compose logs backend | grep -i "callback\|payment"
+
+   # Поиск ошибок
+   docker compose logs backend | grep -i "error\|ERROR"
+
+   # Просмотр файлов логов приложения
+   docker compose exec backend tail -f logs/combined.log
+   docker compose exec backend tail -f logs/error.log
    ```
+
+   **Подробная инструкция:** [docs/LOGS.md](docs/LOGS.md) - Полное руководство по просмотру и анализу логов
 
 ### Запуск без Docker (локальная разработка)
 
@@ -153,7 +165,7 @@ Telegram-бот с мини-приложением для автоматизац
 TG_BOT_Chvetyk/
 ├── backend/          # Backend API (Node.js + TypeScript + Express)
 ├── frontend/         # Mini App (React + TypeScript + Vite)
-├── docker-compose.yml
+├── docker compose.yml
 ├── .env.example
 └── README.md
 ```
@@ -195,13 +207,13 @@ TG_BOT_Chvetyk/
 
 ```bash
 # 1. Запустите все сервисы
-docker-compose up -d
+docker compose up -d
 
 # 2. Выполните миграции БД
-docker-compose exec backend npm run migrate
+docker compose exec backend npm run migrate
 
 # 3. Загрузите тестовые данные (13 товаров и 5 категорий)
-docker-compose exec backend npm run seed
+docker compose exec backend npm run seed
 
 # 4. Откройте бота в Telegram: @FlowersStudioBot
 # 5. Отправьте /start и нажмите кнопку "🌺 Открыть каталог"

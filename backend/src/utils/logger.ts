@@ -104,10 +104,9 @@ export const logger = winston.createLogger({
   ],
 });
 
-if (config.nodeEnv !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
-}
+// В production тоже выводим в консоль для Docker логов
+logger.add(
+  new winston.transports.Console({
+    format: consoleFormat,
+  })
+);
