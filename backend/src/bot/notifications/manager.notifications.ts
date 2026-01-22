@@ -199,11 +199,10 @@ export async function notifyManagerPaymentReceipt(
         try {
           await bot.telegram.sendPhoto(
             parseInt(managerId, 10),
-            receipt.imageBuffer,
+            { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
             { 
               caption,
-              reply_markup: keyboard.reply_markup,
-              filename: receipt.fileName || 'receipt.jpg'
+              reply_markup: keyboard.reply_markup
             }
           );
           logger.info(`Payment receipt sent to manager ${managerId} for order ${receipt.orderNumber}`);
@@ -236,11 +235,10 @@ export async function notifyManagerPaymentReceipt(
       
       const result = await bot.telegram.sendPhoto(
         chatId,
-        receipt.imageBuffer,
+        { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
         { 
           caption,
-          reply_markup: keyboard.reply_markup,
-          filename: receipt.fileName || 'receipt.jpg'
+          reply_markup: keyboard.reply_markup
         }
       );
       
