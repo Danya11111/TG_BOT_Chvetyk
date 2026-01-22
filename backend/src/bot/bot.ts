@@ -121,8 +121,31 @@ export async function startBot(): Promise<void> {
       }
       
       if (!retrySuccess) {
-        // Не бросаем ошибку, чтобы сервер продолжал работать
-        logger.warn('Bot will not be available, but server continues running');
+        // Пробуем использовать webhook как fallback
+        logger.warn('Polling failed, attempting to use webhook instead...');
+        try {
+          const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
+          await botInstance.telegram.setWebhook(webhookUrl, {
+            drop_pending_updates: true,
+          });
+          logger.info(`✅ Webhook set successfully: ${webhookUrl}`);
+          logger.info('🚀 Bot will receive updates via webhook instead of polling');
+        } catch (webhookError: any) {
+          logger.error('Failed to set webhook:', {
+            errorMessage: webhookError?.message,
+            errorCode: webhookError?.response?.error_code,
+            errorDescription: webhookError?.response?.description,
+          });
+          logger.warn('Bot will not be available, but server continues running');
+          logger.error('❌ CRITICAL: Bot cannot start due to 409 conflict.');
+          logger.error('❌ Another bot instance is running elsewhere with the same token.');
+          logger.error('❌ To fix this, you need to:');
+          logger.error('   1. Find and stop the other bot instance');
+          logger.error('   2. Check other servers/containers using this bot token');
+          logger.error('   3. Or wait for the other instance to stop naturally');
+          logger.warn('💡 Manual webhook setup:');
+          logger.warn(`   curl -X POST "https://api.telegram.org/bot${config.telegram.botToken.substring(0, 10)}.../setWebhook?url=${config.apiUrl}/api/telegram/webhook"`);
+        }
       }
     } else {
       logger.error('Failed to start bot (non-409 error):', error);

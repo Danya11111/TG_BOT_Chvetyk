@@ -74,6 +74,23 @@ export function createApp(): Express {
     })
   );
 
+  // Telegram Webhook endpoint (для fallback, если polling не работает)
+  // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
+  app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+      const { getBot } = await import('../bot/bot');
+      const bot = getBot();
+      // Парсим JSON из raw body
+      const update = JSON.parse(req.body.toString());
+      await bot.handleUpdate(update);
+      res.status(200).send('OK');
+    } catch (error) {
+      const { logger } = await import('../utils/logger');
+      logger.error('Webhook error:', error);
+      res.status(200).send('OK'); // Всегда отвечаем OK, чтобы Telegram не повторял запрос
+    }
+  });
+
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(requestLogger);
