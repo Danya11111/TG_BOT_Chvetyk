@@ -199,11 +199,22 @@ export async function notifyManagerPaymentReceipt(
         try {
           await bot.telegram.sendPhoto(
             parseInt(managerId, 10),
-            { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
-            { caption, ...keyboard }
+            receipt.imageBuffer,
+            { 
+              caption,
+              reply_markup: keyboard.reply_markup,
+              filename: receipt.fileName || 'receipt.jpg'
+            }
           );
+          logger.info(`Payment receipt sent to manager ${managerId} for order ${receipt.orderNumber}`);
         } catch (error) {
-          logger.error(`Failed to send receipt to manager ${managerId}:`, error);
+          logger.error(`Failed to send receipt to manager ${managerId}:`, {
+            error,
+            managerId,
+            orderId: receipt.orderId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
         }
       }
     };
@@ -215,14 +226,41 @@ export async function notifyManagerPaymentReceipt(
     }
 
     try {
-      await bot.telegram.sendPhoto(
+      logger.info('Sending receipt to manager group', {
         chatId,
-        { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
-        { caption, ...keyboard }
+        orderId: receipt.orderId,
+        orderNumber: receipt.orderNumber,
+        imageBufferSize: receipt.imageBuffer.length,
+        fileName: receipt.fileName
+      });
+      
+      const result = await bot.telegram.sendPhoto(
+        chatId,
+        receipt.imageBuffer,
+        { 
+          caption,
+          reply_markup: keyboard.reply_markup,
+          filename: receipt.fileName || 'receipt.jpg'
+        }
       );
-      logger.info(`Payment receipt sent to manager group for order ${receipt.orderNumber}`);
+      
+      logger.info(`Payment receipt sent to manager group for order ${receipt.orderNumber}`, {
+        messageId: result.message_id,
+        chatId: result.chat.id,
+        orderId: receipt.orderId,
+        hasPhoto: !!result.photo,
+        photoCount: result.photo?.length || 0
+      });
     } catch (error) {
-      logger.error('Failed to send payment receipt to manager group:', error);
+      logger.error('Failed to send payment receipt to manager group:', {
+        error,
+        chatId,
+        orderId: receipt.orderId,
+        orderNumber: receipt.orderNumber,
+        imageBufferSize: receipt.imageBuffer.length,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       await sendToManagers();
     }
   } catch (error) {

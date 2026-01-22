@@ -20,7 +20,14 @@ export async function handleCallback(ctx: Context): Promise<void> {
     return;
   }
 
-  logger.info('Received callback', { callbackData, from: ctx.from?.id, username: ctx.from?.username });
+  logger.info('Received callback', { 
+    callbackData, 
+    from: ctx.from?.id, 
+    username: ctx.from?.username,
+    messageId: (ctx.callbackQuery as any)?.message?.message_id,
+    chatId: (ctx.callbackQuery as any)?.message?.chat?.id,
+    hasPhoto: !!(ctx.callbackQuery as any)?.message?.photo
+  });
 
   const confirmPrefix = 'payment_confirm:';
   const rejectPrefix = 'payment_reject:';
@@ -121,30 +128,46 @@ export async function handleCallback(ctx: Context): Promise<void> {
       ];
     }
 
+    logger.info('Executing update query', { orderId, action, queryParams: queryParams.map((p, i) => i === 2 ? '***' : p) });
+    
     const updateResult = await db.query(updateQuery, queryParams);
     const updatedOrder = updateResult.rows[0];
 
     if (!updatedOrder) {
-      logger.error('Failed to update order', { orderId, action, updateResult });
+      logger.error('Failed to update order - no rows returned', { 
+        orderId, 
+        action, 
+        rowCount: updateResult.rowCount,
+        query: updateQuery.substring(0, 100)
+      });
+      
       // Проверяем еще раз статус заказа
       const recheckResult = await db.query(
-        `SELECT payment_status FROM orders WHERE id = $1`,
+        `SELECT payment_status, status FROM orders WHERE id = $1`,
         [orderId]
       );
+      
       if (recheckResult.rows.length) {
-        const currentPaymentStatus = recheckResult.rows[0].payment_status;
-        if (action === 'confirm' && currentPaymentStatus === PAYMENT_STATUSES.CONFIRMED) {
+        const currentStatus = recheckResult.rows[0];
+        logger.info('Recheck order status', { orderId, currentPaymentStatus: currentStatus.payment_status, currentStatus: currentStatus.status });
+        
+        if (action === 'confirm' && currentStatus.payment_status === PAYMENT_STATUSES.CONFIRMED) {
           await ctx.answerCbQuery('Оплата уже подтверждена');
           return;
         }
-        if (action === 'reject' && currentPaymentStatus === PAYMENT_STATUSES.REJECTED) {
+        if (action === 'reject' && currentStatus.payment_status === PAYMENT_STATUSES.REJECTED) {
           await ctx.answerCbQuery('Оплата уже отклонена');
           return;
         }
+      } else {
+        logger.error('Order not found during recheck', { orderId });
       }
+      
       await ctx.answerCbQuery('Не удалось обновить статус заказа');
       return;
     }
+
+    logger.info('Order updated successfully', { orderId, action, updatedOrderId: updatedOrder.id });
 
     // Общий блок обработки после успешного обновления (работает для обычного и принудительного)
 
@@ -200,6 +223,13 @@ export async function handleCallback(ctx: Context): Promise<void> {
       await ctx.telegram.sendMessage(Number(orderDetails.telegram_id), message);
     }
 
+    // ВАЖНО: Сначала отвечаем на callback query, потом редактируем сообщение
+    // Telegram требует ответа на callback query в течение нескольких секунд
+    const answerText = action === 'confirm' ? 'Оплата подтверждена' : 'Отмечено как не оплачено';
+    await ctx.answerCbQuery(answerText);
+    logger.info(`Payment ${action === 'confirm' ? 'confirmed' : 'rejected'} for order ${orderId} by manager ${manager?.id}`);
+
+    // После ответа на callback query редактируем сообщение
     if ('message' in (ctx.callbackQuery as any)) {
       const originalMessage = (ctx.callbackQuery as any).message;
       const originalText = originalMessage?.text || originalMessage?.caption || '';
@@ -212,23 +242,25 @@ export async function handleCallback(ctx: Context): Promise<void> {
         // Если это сообщение с фото (чек), обновляем caption
         if (originalMessage.photo && originalMessage.photo.length > 0) {
           await ctx.editMessageCaption(updatedText, { reply_markup: { inline_keyboard: [] } });
+          logger.info('Message caption updated', { messageId: originalMessage?.message_id, orderId });
         } else {
           // Обычное текстовое сообщение
           await ctx.editMessageText(updatedText, { reply_markup: { inline_keyboard: [] } });
+          logger.info('Message text updated', { messageId: originalMessage?.message_id, orderId });
         }
       } catch (error) {
         logger.warn('Failed to edit manager message', { 
           error, 
           messageId: originalMessage?.message_id,
+          chatId: originalMessage?.chat?.id,
           hasPhoto: !!originalMessage?.photo,
-          errorMessage: error instanceof Error ? error.message : String(error)
+          errorMessage: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
         });
         // Не прерываем выполнение, если не удалось отредактировать сообщение
+        // Главное - callback query уже отвечен
       }
     }
-
-    await ctx.answerCbQuery(action === 'confirm' ? 'Оплата подтверждена' : 'Отмечено как не оплачено');
-    logger.info(`Payment ${action === 'confirm' ? 'confirmed' : 'rejected'} for order ${orderId} by manager ${manager?.id}`);
   } catch (error) {
     logger.error('Failed to handle payment callback', {
       error,

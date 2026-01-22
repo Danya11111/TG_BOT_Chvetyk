@@ -4,6 +4,7 @@ import { NotFoundError, UnauthorizedError, ValidationError } from '../../utils/e
 import { db } from '../../database/connection';
 import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { notifyManagerPaymentReceipt, notifyManagerPaymentRequest } from '../../bot/notifications';
+import { logger } from '../../utils/logger';
 
 interface CreateOrderPayload {
   customer: {
@@ -413,6 +414,13 @@ class OrdersController {
 
     // Чеки не сохраняются в БД, только отправляются в Telegram группу
     // Изображения остаются в группе Telegram
+    logger.info('Sending receipt to managers', {
+      orderId,
+      orderNumber: order.order_number,
+      imageBufferSize: imageBuffer.length,
+      fileName: fileName || 'receipt.jpg'
+    });
+    
     setImmediate(() => {
       void notifyManagerPaymentReceipt({
         orderId,
@@ -423,6 +431,14 @@ class OrdersController {
         customerTelegramUsername: telegramUser.username || undefined,
         imageBuffer,
         fileName: fileName || undefined,
+      }).catch((error) => {
+        logger.error('Failed to notify managers about receipt', {
+          error,
+          orderId,
+          orderNumber: order.order_number,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
       });
     });
 
