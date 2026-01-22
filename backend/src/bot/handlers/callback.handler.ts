@@ -172,7 +172,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
           RETURNING id, order_number, total, created_at, user_id
         `;
         
-        const forceParams = action === 'confirm' 
+        const forceParams: any[] = action === 'confirm' 
           ? [PAYMENT_STATUSES.CONFIRMED, ORDER_STATUSES.CONFIRMED, manager?.id || null, orderId]
           : [PAYMENT_STATUSES.REJECTED, ORDER_STATUSES.CANCELLED, manager?.id || null, orderId];
         
