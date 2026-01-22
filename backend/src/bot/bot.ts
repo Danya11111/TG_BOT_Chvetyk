@@ -46,19 +46,23 @@ export function getBot(): Telegraf {
 export async function startBot(): Promise<void> {
   const botInstance = getBot();
   
-  // Сначала всегда очищаем webhook перед запуском (на случай если был установлен)
+  // Проверяем, установлен ли webhook
   try {
-    await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-    logger.info('Webhook cleared before bot start');
+    const webhookInfo = await botInstance.telegram.getWebhookInfo();
+    if (webhookInfo.url) {
+      logger.info('✅ Webhook already set, bot will receive updates via webhook:', { url: webhookInfo.url });
+      // Если webhook установлен, не пытаемся запустить polling
+      return;
+    }
+    logger.info('No webhook set, attempting to start polling...');
   } catch (webhookError) {
-    // Игнорируем ошибки при очистке webhook (может не быть установлен)
-    logger.debug('Webhook clear attempt (may not exist):', webhookError);
+    logger.debug('Webhook info check failed, attempting polling:', webhookError);
   }
   
-  // Если ошибка 409 (конфликт), сначала очищаем webhook и getUpdates
+  // Если webhook не установлен, пытаемся запустить polling
   try {
     await botInstance.launch();
-    logger.info('🚀 Telegram Bot started');
+    logger.info('🚀 Telegram Bot started (polling mode)');
   } catch (error: any) {
     // Логируем полную информацию об ошибке для диагностики
     logger.error('Bot launch error details:', {

@@ -77,16 +77,37 @@ export function createApp(): Express {
   // Telegram Webhook endpoint (для fallback, если polling не работает)
   // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
   app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const { logger } = await import('../utils/logger');
     try {
+      logger.info('📥 Webhook request received', {
+        contentType: req.headers['content-type'],
+        bodySize: req.body?.length || 0,
+        hasBody: !!req.body,
+      });
+      
       const { getBot } = await import('../bot/bot');
       const bot = getBot();
+      
       // Парсим JSON из raw body
       const update = JSON.parse(req.body.toString());
+      logger.info('📥 Processing webhook update', {
+        updateId: update.update_id,
+        hasCallbackQuery: !!update.callback_query,
+        callbackData: update.callback_query?.data,
+        messageId: update.callback_query?.message?.message_id,
+        chatId: update.callback_query?.message?.chat?.id,
+      });
+      
       await bot.handleUpdate(update);
+      logger.info('✅ Webhook update processed successfully', { updateId: update.update_id });
       res.status(200).send('OK');
     } catch (error) {
-      const { logger } = await import('../utils/logger');
-      logger.error('Webhook error:', error);
+      logger.error('❌ Webhook error:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        bodyPreview: req.body?.toString().substring(0, 200),
+      });
       res.status(200).send('OK'); // Всегда отвечаем OK, чтобы Telegram не повторял запрос
     }
   });
