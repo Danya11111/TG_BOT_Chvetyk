@@ -8,15 +8,19 @@ export function setupHandlers(bot: Telegraf): void {
   // чтобы перехватывать все callback до других обработчиков
   bot.on('callback_query', async (ctx) => {
     const { logger } = await import('../../utils/logger');
-    logger.info('Bot received callback_query event', {
+    // Логируем ВСЕ callback запросы БЕЗ фильтрации для диагностики
+    logger.info('🔔 Bot received callback_query event', {
       hasCallbackQuery: !!ctx.callbackQuery,
       fromId: ctx.from?.id,
+      fromUsername: ctx.from?.username,
       callbackData: (ctx.callbackQuery as any)?.data,
+      messageChatId: (ctx.callbackQuery as any)?.message?.chat?.id,
+      messageId: (ctx.callbackQuery as any)?.message?.message_id,
     });
     try {
       await handleCallback(ctx);
     } catch (error) {
-      logger.error('Unhandled error in callback handler', {
+      logger.error('❌ Unhandled error in callback handler', {
         error,
         errorMessage: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
