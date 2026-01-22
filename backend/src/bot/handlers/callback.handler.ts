@@ -5,18 +5,45 @@ import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { logger } from '../../utils/logger';
 
 export async function handleCallback(ctx: Context): Promise<void> {
+  // Логируем ВСЕ callback запросы в самом начале для диагностики
+  logger.info('=== CALLBACK RECEIVED ===', {
+    hasCallbackQuery: !!ctx.callbackQuery,
+    callbackQueryType: ctx.callbackQuery ? typeof ctx.callbackQuery : 'none',
+    fromId: ctx.from?.id,
+    fromUsername: ctx.from?.username,
+    fromFirstName: ctx.from?.first_name,
+    messageId: (ctx.callbackQuery as any)?.message?.message_id,
+    chatId: (ctx.callbackQuery as any)?.message?.chat?.id,
+    rawCallbackData: (ctx.callbackQuery as any)?.data,
+  });
+
   const callbackQuery = ctx.callbackQuery;
   if (!callbackQuery || !('data' in callbackQuery)) {
-    logger.warn('Callback query without data', { callbackQuery });
-    await ctx.answerCbQuery('Неизвестная команда');
+    logger.warn('Callback query without data', { 
+      callbackQuery,
+      callbackQueryKeys: callbackQuery ? Object.keys(callbackQuery) : [],
+    });
+    try {
+      await ctx.answerCbQuery('Неизвестная команда');
+    } catch (error) {
+      logger.error('Failed to answer callback query (no data)', error);
+    }
     return;
   }
 
   const callbackData = callbackQuery.data as string;
 
   if (!callbackData) {
-    logger.warn('Empty callback data', { callbackQuery });
-    await ctx.answerCbQuery('Неизвестная команда');
+    logger.warn('Empty callback data', { 
+      callbackQuery,
+      callbackQueryData: callbackQuery.data,
+      callbackQueryDataType: typeof callbackQuery.data,
+    });
+    try {
+      await ctx.answerCbQuery('Неизвестная команда');
+    } catch (error) {
+      logger.error('Failed to answer callback query (empty data)', error);
+    }
     return;
   }
 
@@ -55,6 +82,37 @@ export async function handleCallback(ctx: Context): Promise<void> {
     await ctx.answerCbQuery('Некорректный заказ');
     return;
   }
+
+  // Проверяем, что callback пришел из группы менеджеров
+  // Разрешаем нажимать кнопку любому участнику группы
+  const messageChatId = (ctx.callbackQuery as any)?.message?.chat?.id;
+  const managerGroupChatId = Number(config.managers.groupChatId);
+  
+  logger.info('Checking manager group access', {
+    messageChatId,
+    managerGroupChatId,
+    isGroup: messageChatId < 0, // Группы имеют отрицательный chat_id
+    matches: messageChatId === managerGroupChatId,
+  });
+
+  // Если callback не из группы менеджеров, отклоняем
+  if (!messageChatId || messageChatId !== managerGroupChatId) {
+    logger.warn('Callback not from manager group', {
+      messageChatId,
+      managerGroupChatId,
+      fromId: ctx.from?.id,
+      username: ctx.from?.username,
+    });
+    await ctx.answerCbQuery('Эта кнопка доступна только в группе менеджеров');
+    return;
+  }
+
+  logger.info('Callback from manager group confirmed', {
+    chatId: messageChatId,
+    fromId: ctx.from?.id,
+    username: ctx.from?.username,
+    orderId,
+  });
 
   const manager = ctx.from;
   const managerLabel = manager?.username ? `@${manager.username}` : manager?.first_name || 'менеджер';

@@ -185,10 +185,25 @@ export async function notifyManagerPaymentReceipt(
       `Проверьте оплату и подтвердите заказ.`;
 
     // Добавляем кнопки подтверждения оплаты к сообщению с чеком
+    const confirmCallback = `payment_confirm:${receipt.orderId}`;
+    const rejectCallback = `payment_reject:${receipt.orderId}`;
+    
+    logger.info('Creating payment buttons', {
+      orderId: receipt.orderId,
+      orderNumber: receipt.orderNumber,
+      confirmCallback,
+      rejectCallback,
+    });
+    
     const keyboard = Markup.inlineKeyboard([
-      Markup.button.callback('✅ Подтвердить оплату', `payment_confirm:${receipt.orderId}`),
-      Markup.button.callback('❌ Не оплачено', `payment_reject:${receipt.orderId}`),
+      Markup.button.callback('✅ Подтвердить оплату', confirmCallback),
+      Markup.button.callback('❌ Не оплачено', rejectCallback),
     ]);
+    
+    logger.debug('Keyboard created', {
+      keyboard: JSON.stringify(keyboard.reply_markup),
+      inlineKeyboard: keyboard.reply_markup?.inline_keyboard,
+    });
 
     const sendToManagers = async () => {
       if (!config.managers.telegramIds.length) {
