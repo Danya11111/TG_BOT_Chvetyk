@@ -26,33 +26,27 @@ export default function ProductPage() {
     return () => reset();
   }, [id, fetchProduct, reset]);
 
-  // Handle Telegram Main Button
+  // Hide Telegram Main Button on this page
   useEffect(() => {
-    if (product) {
-      WebApp.MainButton.setText(`Добавить в корзину • ${(product.price * quantity).toLocaleString('ru-RU')} ₽`);
-      WebApp.MainButton.enable();
-      WebApp.MainButton.show();
-      
-      const handleMainButtonClick = () => {
-        addItem({
-          productId: product.id,
-          productName: product.name,
-          price: product.price,
-          quantity,
-          image: product.images?.[0],
-        });
-        WebApp.HapticFeedback.notificationOccurred('success');
-        navigate('/cart');
-      };
+    WebApp.MainButton.hide();
+    return () => {
+      WebApp.MainButton.hide();
+    };
+  }, []);
 
-      WebApp.MainButton.onClick(handleMainButtonClick);
-
-      return () => {
-        WebApp.MainButton.offClick(handleMainButtonClick);
-        WebApp.MainButton.hide();
-      };
-    }
-  }, [product, quantity, addItem, navigate]);
+  const handleAddToCart = () => {
+    if (!product || !product.in_stock) return;
+    
+    addItem({
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+      quantity,
+      image: product.images?.[0],
+    });
+    WebApp.HapticFeedback.notificationOccurred('success');
+    navigate('/cart');
+  };
 
   const increaseQuantity = () => {
     const maxQuantity = product?.stock_quantity || 99;
@@ -270,6 +264,23 @@ export default function ProductPage() {
               {product.description}
             </p>
           </div>
+        )}
+
+        {/* Add to Cart Button - Integrated in content */}
+        {product.in_stock && (
+          <Button
+            onClick={handleAddToCart}
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={{
+              marginBottom: '24px',
+              borderRadius: '16px',
+              boxShadow: 'var(--shadow-md)',
+            }}
+          >
+            Добавить в корзину • {(product.price * quantity).toLocaleString('ru-RU')} ₽
+          </Button>
         )}
 
         {/* Attributes (if any) */}

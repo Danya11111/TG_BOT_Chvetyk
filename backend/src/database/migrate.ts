@@ -28,10 +28,14 @@ async function runMigrations(): Promise<void> {
     // Проверка подключения
     const connected = await testConnection();
     if (!connected) {
-      throw new Error('Database connection failed');
+      const error = new Error('Database connection failed');
+      logger.error('Migration failed:', error);
+      console.error('❌ Database connection failed. Cannot run migrations.');
+      throw error;
     }
 
     logger.info('Running migrations...');
+    console.log('🔄 Running database migrations...');
 
     // Пути к директориям миграций (для разных окружений)
     const migrationDirs = [
@@ -43,7 +47,11 @@ async function runMigrations(): Promise<void> {
 
     const migrationDir = migrationDirs.find((dir) => existsSync(dir));
     if (!migrationDir) {
-      throw new Error(`Migration directory not found. Checked: ${migrationDirs.join(', ')}`);
+      const error = new Error(`Migration directory not found. Checked: ${migrationDirs.join(', ')}`);
+      logger.error('Migration failed:', error);
+      console.error('❌ Migration directory not found');
+      console.error('Checked directories:', migrationDirs.join(', '));
+      throw error;
     }
 
     await ensureMigrationsTable();
@@ -55,14 +63,22 @@ async function runMigrations(): Promise<void> {
 
     if (files.length === 0) {
       logger.warn(`No migration files found in ${migrationDir}`);
+      console.log(`⚠️  No migration files found in ${migrationDir}`);
       return;
     }
 
     logger.info(`Using migration directory: ${migrationDir}`);
+    console.log(`📁 Using migration directory: ${migrationDir}`);
+    console.log(`📋 Found ${files.length} migration file(s)`);
+
+    let appliedCount = 0;
+    let skippedCount = 0;
 
     for (const file of files) {
       if (executed.has(file)) {
         logger.info(`Skipping migration ${file} (already applied)`);
+        console.log(`⏭️  Skipping ${file} (already applied)`);
+        skippedCount++;
         continue;
       }
 
@@ -71,19 +87,26 @@ async function runMigrations(): Promise<void> {
 
       const client = await pool.connect();
       try {
+        console.log(`🔄 Applying migration: ${file}...`);
         await client.query('BEGIN');
         await client.query(migrationSQL);
         await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
         await client.query('COMMIT');
         logger.info(`✅ Migration applied: ${file}`);
+        console.log(`✅ Migration applied: ${file}`);
+        appliedCount++;
       } catch (error) {
         await client.query('ROLLBACK');
+        logger.error(`❌ Failed to apply migration ${file}:`, error);
+        console.error(`❌ Failed to apply migration ${file}:`, error);
         throw error;
       } finally {
         client.release();
       }
     }
+    
     logger.info('✅ All migrations completed successfully');
+    console.log(`\n✅ Migrations completed: ${appliedCount} applied, ${skippedCount} skipped`);
   } catch (error) {
     logger.error('Migration failed:', error);
     process.exit(1);

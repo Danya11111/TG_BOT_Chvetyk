@@ -54,7 +54,34 @@ export async function handleCallback(ctx: Context): Promise<void> {
   const actionTime = new Date();
 
   try {
+    // Сначала проверяем текущий статус заказа
+    const currentStatusResult = await db.query(
+      `SELECT payment_status, status, order_number FROM orders WHERE id = $1`,
+      [orderId]
+    );
+    
+    if (!currentStatusResult.rows.length) {
+      logger.warn('Order not found', { orderId });
+      await ctx.answerCbQuery('Заказ не найден');
+      return;
+    }
+
+    const currentStatus = currentStatusResult.rows[0];
+    
+    // Если заказ уже подтвержден или отклонен, просто сообщаем об этом
+    if (action === 'confirm' && currentStatus.payment_status === PAYMENT_STATUSES.CONFIRMED) {
+      await ctx.answerCbQuery('Оплата уже подтверждена');
+      return;
+    }
+    
+    if (action === 'reject' && currentStatus.payment_status === PAYMENT_STATUSES.REJECTED) {
+      await ctx.answerCbQuery('Оплата уже отклонена');
+      return;
+    }
+
     // Используем параметризованные запросы для безопасности
+    // Обновляем заказ напрямую, если он еще не в финальном статусе
+    // Это гарантирует, что кнопка работает независимо от действий клиента
     let updateQuery: string;
     let queryParams: any[];
 
@@ -66,7 +93,8 @@ export async function handleCallback(ctx: Context): Promise<void> {
             payment_confirmed_by = $3,
             payment_confirmed_at = NOW(),
             updated_at = NOW()
-        WHERE id = $4 AND payment_status = $5
+        WHERE id = $4
+          AND payment_status != $1
         RETURNING id, order_number, total, created_at, user_id
       `;
       queryParams = [
@@ -74,7 +102,6 @@ export async function handleCallback(ctx: Context): Promise<void> {
         ORDER_STATUSES.CONFIRMED,
         manager?.id || null,
         orderId,
-        PAYMENT_STATUSES.PENDING_CONFIRMATION,
       ];
     } else {
       updateQuery = `
@@ -84,7 +111,8 @@ export async function handleCallback(ctx: Context): Promise<void> {
             payment_rejected_by = $3,
             payment_rejected_at = NOW(),
             updated_at = NOW()
-        WHERE id = $4 AND payment_status = $5
+        WHERE id = $4
+          AND payment_status != $1
         RETURNING id, order_number, total, created_at, user_id
       `;
       queryParams = [
@@ -92,35 +120,78 @@ export async function handleCallback(ctx: Context): Promise<void> {
         ORDER_STATUSES.CANCELLED,
         manager?.id || null,
         orderId,
-        PAYMENT_STATUSES.PENDING_CONFIRMATION,
       ];
     }
 
-    const updateResult = await db.query(updateQuery, queryParams);
+    let updateResult = await db.query(updateQuery, queryParams);
+    let updatedOrder = updateResult.rows[0];
 
-    if (!updateResult.rows.length) {
-      // Проверяем текущий статус заказа, чтобы дать более информативный ответ
-      const currentStatusResult = await db.query(
-        `SELECT payment_status, status FROM orders WHERE id = $1`,
+    // Если обычное обновление не сработало, пытаемся принудительное обновление
+    if (!updatedOrder) {
+      // Проверяем текущий статус еще раз
+      const latestStatusResult = await db.query(
+        `SELECT payment_status FROM orders WHERE id = $1`,
         [orderId]
       );
       
-      if (currentStatusResult.rows.length) {
-        const currentStatus = currentStatusResult.rows[0];
-        if (currentStatus.payment_status === PAYMENT_STATUSES.CONFIRMED) {
+      if (latestStatusResult.rows.length) {
+        const latestStatus = latestStatusResult.rows[0].payment_status;
+        
+        // Если уже в финальном статусе, просто сообщаем
+        if (action === 'confirm' && latestStatus === PAYMENT_STATUSES.CONFIRMED) {
           await ctx.answerCbQuery('Оплата уже подтверждена');
-        } else if (currentStatus.payment_status === PAYMENT_STATUSES.REJECTED) {
+          return;
+        }
+        
+        if (action === 'reject' && latestStatus === PAYMENT_STATUSES.REJECTED) {
           await ctx.answerCbQuery('Оплата уже отклонена');
-        } else {
-          await ctx.answerCbQuery('Статус уже обновлён');
+          return;
+        }
+        
+        // Пытаемся принудительное обновление (без проверки статуса в WHERE)
+        // Это гарантирует, что кнопка работает независимо от действий клиента
+        logger.info('Attempting force update', { orderId, action, currentStatus: latestStatus });
+        
+        const forceUpdateQuery = action === 'confirm' ? `
+          UPDATE orders
+          SET payment_status = $1,
+              status = $2,
+              payment_confirmed_by = $3,
+              payment_confirmed_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $4
+          RETURNING id, order_number, total, created_at, user_id
+        ` : `
+          UPDATE orders
+          SET payment_status = $1,
+              status = $2,
+              payment_rejected_by = $3,
+              payment_rejected_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $4
+          RETURNING id, order_number, total, created_at, user_id
+        `;
+        
+        const forceParams = action === 'confirm' 
+          ? [PAYMENT_STATUSES.CONFIRMED, ORDER_STATUSES.CONFIRMED, manager?.id || null, orderId]
+          : [PAYMENT_STATUSES.REJECTED, ORDER_STATUSES.CANCELLED, manager?.id || null, orderId];
+        
+        updateResult = await db.query(forceUpdateQuery, forceParams);
+        updatedOrder = updateResult.rows[0];
+        
+        if (!updatedOrder) {
+          logger.error('Failed to force update order', { orderId, action });
+          await ctx.answerCbQuery('Не удалось обновить статус заказа');
+          return;
         }
       } else {
+        logger.error('Order not found', { orderId, action });
         await ctx.answerCbQuery('Заказ не найден');
+        return;
       }
-      return;
     }
 
-    const updatedOrder = updateResult.rows[0];
+    // Общий блок обработки после успешного обновления (работает для обычного и принудительного)
 
     await db.query(
       `INSERT INTO order_status_history (order_id, status, comment)
@@ -176,16 +247,28 @@ export async function handleCallback(ctx: Context): Promise<void> {
 
     if ('message' in (ctx.callbackQuery as any)) {
       const originalMessage = (ctx.callbackQuery as any).message;
-      const originalText = originalMessage?.text || '';
+      const originalText = originalMessage?.text || originalMessage?.caption || '';
       const updatedText =
         `${originalText}\n\n` +
         `${action === 'confirm' ? '✅ Оплата подтверждена' : '❌ Оплата не прошла'}\n` +
         `Менеджер: ${managerLabel}\n` +
         `Время: ${actionTime.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
       try {
-        await ctx.editMessageText(updatedText, { reply_markup: { inline_keyboard: [] } });
+        // Если это сообщение с фото (чек), обновляем caption
+        if (originalMessage.photo && originalMessage.photo.length > 0) {
+          await ctx.editMessageCaption(updatedText, { reply_markup: { inline_keyboard: [] } });
+        } else {
+          // Обычное текстовое сообщение
+          await ctx.editMessageText(updatedText, { reply_markup: { inline_keyboard: [] } });
+        }
       } catch (error) {
-        logger.warn('Failed to edit manager message', error);
+        logger.warn('Failed to edit manager message', { 
+          error, 
+          messageId: originalMessage?.message_id,
+          hasPhoto: !!originalMessage?.photo,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        });
+        // Не прерываем выполнение, если не удалось отредактировать сообщение
       }
     }
 
