@@ -76,9 +76,44 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(requestLogger);
 
-  // Health check
-  app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // HTTPS redirect for production
+  if (config.nodeEnv === 'production') {
+    app.use((req, res, next) => {
+      const forwardedProto = req.header('x-forwarded-proto');
+      const host = req.header('host');
+      
+      if (forwardedProto !== 'https' && host) {
+        return res.redirect(301, `https://${host}${req.url}`);
+      }
+      next();
+    });
+  }
+
+  // Health check with database and Redis status
+  app.get('/health', async (req, res) => {
+    const { testConnection } = await import('../database/connection');
+    const { testRedisConnection } = await import('../database/redis');
+    
+    const checks: Record<string, boolean | string> = {
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      checks.database = await testConnection();
+    } catch (error) {
+      checks.database = false;
+      checks.databaseError = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    try {
+      checks.redis = await testRedisConnection();
+    } catch (error) {
+      checks.redis = false;
+      checks.redisError = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    const isHealthy = checks.database === true && checks.redis === true;
+    res.status(isHealthy ? 200 : 503).json(checks);
   });
 
   // API Routes

@@ -19,6 +19,26 @@ export interface OrderStatusResponse extends CreateOrderResponse {
     total: number;
     product_image?: string;
   }>;
+  delivery_type?: string;
+  delivery_address?: {
+    city?: string;
+    street?: string;
+    house?: string;
+    apartment?: string;
+    postalCode?: string;
+  } | null;
+  delivery_date?: string;
+  delivery_time?: string;
+  payment_type?: string;
+  comment?: string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  card_text?: string | null;
+  history?: Array<{
+    status: string;
+    comment?: string | null;
+    changed_at: string;
+  }>;
 }
 
 export interface OrdersListItem {

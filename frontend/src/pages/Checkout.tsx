@@ -4,6 +4,7 @@ import WebApp from '@twa-dev/sdk';
 import { getTelegramInitData } from '../utils/initData';
 import { useCartStore } from '../store/cart.store';
 import { useCheckoutStore, CheckoutFormData, DeliveryAddress } from '../store/checkout.store';
+import { useProfileStore } from '../store/profile.store';
 import { createOrder, getOrderStatus, uploadReceipt } from '../api/orders.api';
 import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -13,6 +14,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const { items, getTotal, clearCart } = useCartStore();
   const { formData: savedFormData, saveFormData, clearFormData } = useCheckoutStore();
+  const { addresses: savedAddresses } = useProfileStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orderId, setOrderId] = useState<number | null>(null);
@@ -27,6 +29,25 @@ export default function CheckoutPage() {
   const [receiptSent, setReceiptSent] = useState(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const { config: customerConfig } = useCustomerConfig();
+
+  const getMinDeliveryTime = useCallback((dateValue?: string) => {
+    if (!dateValue) {
+      return '';
+    }
+    const now = new Date();
+    const deliveryDate = new Date(dateValue);
+    if (Number.isNaN(deliveryDate.getTime())) {
+      return '';
+    }
+    const isSameDay = now.toDateString() === deliveryDate.toDateString();
+    if (!isSameDay) {
+      return '';
+    }
+    const minDate = new Date(now.getTime() + 60 * 60 * 1000);
+    const hours = String(minDate.getHours()).padStart(2, '0');
+    const minutes = String(minDate.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }, []);
 
   // Загружаем сохраненные данные или используем значения по умолчанию
   const getInitialFormData = (): CheckoutFormData => {
@@ -92,6 +113,11 @@ export default function CheckoutPage() {
 
     if (!formData.deliveryTime) {
       newErrors.deliveryTime = 'Укажите время';
+    } else if (formData.deliveryType === 'delivery') {
+      const minTime = getMinDeliveryTime(formData.deliveryDate);
+      if (minTime && formData.deliveryTime < minTime) {
+        newErrors.deliveryTime = `Минимальное время доставки — ${minTime}`;
+      }
     }
 
     if (!formData.recipientName?.trim()) {
@@ -110,7 +136,7 @@ export default function CheckoutPage() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData]);
+  }, [formData, getMinDeliveryTime]);
 
   const showAlert = useCallback((message: string) => {
     try {
@@ -295,6 +321,31 @@ export default function CheckoutPage() {
     saveFormData(updatedData);
   }, [customerConfig?.delivery?.city, orderId, formData, saveFormData]);
 
+  useEffect(() => {
+    if (orderId || formData.deliveryType !== 'delivery') {
+      return;
+    }
+    if (!savedAddresses.length) {
+      return;
+    }
+    if (formData.address.street || formData.address.house) {
+      return;
+    }
+    const [first] = savedAddresses;
+    const updatedData = {
+      ...formData,
+      address: {
+        ...formData.address,
+        city: first.city || formData.address.city,
+        street: first.street || '',
+        house: first.house || '',
+        apartment: first.apartment || '',
+      },
+    };
+    setFormData(updatedData);
+    saveFormData(updatedData);
+  }, [savedAddresses, formData, orderId, saveFormData]);
+
 
   useEffect(() => {
     if (!orderId || paymentStatus !== 'processing') {
@@ -374,6 +425,29 @@ export default function CheckoutPage() {
         return newErrors;
       });
     }
+  };
+
+  const handleSelectSavedAddress = (address: {
+    city?: string;
+    street: string;
+    house: string;
+    apartment?: string;
+  }) => {
+    if (orderId) {
+      return;
+    }
+    const updatedData = {
+      ...formData,
+      address: {
+        ...formData.address,
+        city: address.city || formData.address.city,
+        street: address.street || '',
+        house: address.house || '',
+        apartment: address.apartment || '',
+      },
+    };
+    setFormData(updatedData);
+    saveFormData(updatedData);
   };
 
   const isOrderLocked = orderId !== null;
@@ -638,6 +712,38 @@ export default function CheckoutPage() {
               Адрес доставки
             </h3>
 
+            {savedAddresses.length > 0 && !orderId && (
+              <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Сохранённые адреса</div>
+                {savedAddresses.map((addr, index) => {
+                  const addressLabel = [addr.city, addr.street, addr.house].filter(Boolean).join(', ');
+                  const withApartment = addr.apartment ? `${addressLabel}, кв. ${addr.apartment}` : addressLabel;
+                  const isActive =
+                    formData.address.street === addr.street &&
+                    formData.address.house === addr.house &&
+                    (formData.address.apartment || '') === (addr.apartment || '');
+                  return (
+                    <button
+                      key={`${addr.street}-${addr.house}-${index}`}
+                      type="button"
+                      onClick={() => handleSelectSavedAddress(addr)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: isActive ? '2px solid var(--color-accent)' : '1px solid var(--border-light)',
+                        backgroundColor: isActive ? 'var(--bg-secondary)' : 'var(--bg-surface)',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {withApartment || 'Адрес без названия'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div style={{ marginBottom: '12px' }}>
               <input
                 type="text"
@@ -699,6 +805,25 @@ export default function CheckoutPage() {
                 />
               </div>
             </div>
+            {!orderId && (
+              <button
+                type="button"
+                onClick={() => navigate('/profile?tab=addresses')}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-light)',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Добавить новый адрес
+              </button>
+            )}
           </div>
         )}
         
@@ -761,6 +886,7 @@ export default function CheckoutPage() {
               type="time"
               value={formData.deliveryTime || ''}
               onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+              min={formData.deliveryType === 'delivery' ? getMinDeliveryTime(formData.deliveryDate) : undefined}
               style={{
                 width: '100%',
                 maxWidth: '100%',

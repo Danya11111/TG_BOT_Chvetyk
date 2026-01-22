@@ -90,3 +90,15 @@ export const cache = {
     }
   },
 };
+
+// Функция для проверки подключения Redis (для health check)
+export async function testRedisConnection(): Promise<boolean> {
+  try {
+    const client = await getRedisClient();
+    await client.ping();
+    return true;
+  } catch (error) {
+    logger.error('Redis connection test failed:', error);
+    return false;
+  }
+}

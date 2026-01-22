@@ -258,7 +258,21 @@ class OrdersController {
     }
 
     const orderResult = await db.query(
-      `SELECT o.id, o.order_number, o.total, o.status, o.payment_status, o.created_at
+      `SELECT o.id,
+              o.order_number,
+              o.total,
+              o.status,
+              o.payment_status,
+              o.created_at,
+              o.delivery_type,
+              o.delivery_address,
+              o.delivery_date,
+              o.delivery_time,
+              o.payment_type,
+              o.comment,
+              o.recipient_name,
+              o.recipient_phone,
+              o.card_text
        FROM orders o
        INNER JOIN users u ON o.user_id = u.id
        WHERE o.id = $1 AND u.telegram_id = $2`,
@@ -276,10 +290,19 @@ class OrdersController {
       [orderId]
     );
 
+    const historyResult = await db.query(
+      `SELECT status, comment, changed_at
+       FROM order_status_history
+       WHERE order_id = $1
+       ORDER BY changed_at ASC`,
+      [orderId]
+    );
+
     res.json(
       buildSuccessResponse({
         ...orderResult.rows[0],
         items: itemsResult.rows,
+        history: historyResult.rows,
       })
     );
   }
@@ -315,6 +338,15 @@ class OrdersController {
       throw new ValidationError('Размер изображения слишком большой (до 4 МБ)');
     }
 
+    // Валидация реального MIME-типа файла
+    const { fileTypeFromBuffer } = await import('file-type');
+    const fileTypeResult = await fileTypeFromBuffer(imageBuffer);
+    const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    
+    if (!fileTypeResult || !allowedMimeTypes.includes(fileTypeResult.mime)) {
+      throw new ValidationError('Недопустимый формат изображения. Разрешены только PNG, JPEG, JPG, WebP');
+    }
+
     const orderResult = await db.query(
       `SELECT o.order_number, o.customer_name, o.customer_phone
        FROM orders o
@@ -327,11 +359,29 @@ class OrdersController {
       throw new NotFoundError('Order not found');
     }
 
+    // Проверка количества уже загруженных чеков (максимум 3)
+    const receiptCountResult = await db.query(
+      `SELECT COUNT(*) as count
+       FROM order_status_history
+       WHERE order_id = $1 AND status = 'receipt'`,
+      [orderId]
+    );
+    const receiptCount = parseInt(receiptCountResult.rows[0]?.count || '0', 10);
+    if (receiptCount >= 3) {
+      throw new ValidationError('Максимальное количество чеков для заказа - 3');
+    }
+
     const order = orderResult.rows[0] as {
       order_number: string;
       customer_name: string;
       customer_phone: string;
     };
+
+    await db.query(
+      `INSERT INTO order_status_history (order_id, status, comment)
+       VALUES ($1, $2, $3)`,
+      [orderId, 'receipt', 'Чек отправлен клиентом']
+    );
 
     setImmediate(() => {
       void notifyManagerPaymentReceipt({

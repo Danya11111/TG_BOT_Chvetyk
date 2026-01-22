@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
-import { getOrders, OrdersListItem } from '../api/orders.api';
-import { useProfileStore } from '../store/profile.store';
+import { getOrderStatus, getOrders, OrdersListItem, OrderStatusResponse } from '../api/orders.api';
+import { ProfileAddress, useProfileStore } from '../store/profile.store';
+import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
 
@@ -11,15 +12,25 @@ type TabType = 'addresses' | 'orders' | 'support';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>('addresses');
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState<ProfileAddress>({
+    city: '',
+    street: '',
+    house: '',
+    apartment: '',
+  });
   const [orders, setOrders] = useState<OrdersListItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [orderDetails, setOrderDetails] = useState<Record<number, OrderStatusResponse>>({});
+  const [orderDetailsLoading, setOrderDetailsLoading] = useState<Record<number, boolean>>({});
   
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
   const { addresses, addAddress } = useProfileStore();
+  const { config } = useCustomerConfig();
 
   // Получаем данные пользователя из Telegram
   const user = WebApp.initDataUnsafe?.user;
@@ -34,6 +45,20 @@ export default function ProfilePage() {
   useEffect(() => {
     WebApp.MainButton.hide();
   }, []);
+
+  useEffect(() => {
+    if (!address.city && config?.delivery?.city) {
+      setAddress((prev) => ({ ...prev, city: config.delivery.city }));
+    }
+  }, [address.city, config?.delivery?.city]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab') as TabType | null;
+    if (tab && ['addresses', 'orders', 'support'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (activeTab !== 'orders') {
@@ -70,10 +95,99 @@ export default function ProfilePage() {
   }, [activeTab]);
 
   const handleSaveAddress = () => {
-    if (address.trim()) {
-      addAddress(address.trim());
-      setAddress('');
+    if (address.street.trim() && address.house.trim()) {
+      addAddress({
+        city: address.city?.trim(),
+        street: address.street.trim(),
+        house: address.house.trim(),
+        apartment: address.apartment?.trim(),
+      });
+      setAddress({ city: '', street: '', house: '', apartment: '' });
       WebApp.showAlert('Адрес сохранен!');
+      return;
+    }
+    WebApp.showAlert('Укажите улицу и дом.');
+  };
+
+  const formatAddress = (addr: ProfileAddress) => {
+    const parts = [addr.city, addr.street, addr.house].filter(Boolean);
+    const base = parts.join(', ');
+    return addr.apartment ? `${base}, кв. ${addr.apartment}` : base;
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'new':
+        return 'Новый';
+      case 'pending':
+        return 'Ожидает подтверждения';
+      case 'confirmed':
+        return 'Подтвержден';
+      case 'processing':
+        return 'В обработке';
+      case 'ready':
+        return 'Готов к выдаче';
+      case 'shipped':
+        return 'Отправлен';
+      case 'in_delivery':
+        return 'Доставка';
+      case 'delivered':
+        return 'Доставлен';
+      case 'completed':
+        return 'Завершен';
+      case 'cancelled':
+        return 'Отменен';
+      case 'refunded':
+        return 'Возврат';
+      case 'receipt':
+        return 'Чек отправлен';
+      default:
+        return status || '—';
+    }
+  };
+
+  const getPaymentStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'pending_confirmation':
+        return 'Ожидает подтверждения';
+      case 'confirmed':
+        return 'Подтверждена';
+      case 'rejected':
+        return 'Отклонена';
+      default:
+        return status || '—';
+    }
+  };
+
+  const getPaymentTypeLabel = (type?: string) => {
+    switch (type) {
+      case 'card_requisites':
+        return 'Оплата по номеру телефона';
+      case 'sbp_qr':
+        return 'Оплата по QR-коду СБП';
+      default:
+        return type || '—';
+    }
+  };
+
+  const handleToggleOrder = async (orderId: number) => {
+    if (expandedOrderId === orderId) {
+      setExpandedOrderId(null);
+      return;
+    }
+    setExpandedOrderId(orderId);
+    if (orderDetails[orderId]) {
+      return;
+    }
+    setOrderDetailsLoading((prev) => ({ ...prev, [orderId]: true }));
+    try {
+      const details = await getOrderStatus(orderId);
+      setOrderDetails((prev) => ({ ...prev, [orderId]: details }));
+    } catch (error) {
+      console.error('Failed to load order details:', error);
+      WebApp.showAlert('Не удалось загрузить детали заказа.');
+    } finally {
+      setOrderDetailsLoading((prev) => ({ ...prev, [orderId]: false }));
     }
   };
 
@@ -278,7 +392,7 @@ export default function ProfilePage() {
                       color: 'var(--text-primary)'
                     }}
                   >
-                    {addr}
+                    {formatAddress(addr)}
                   </div>
                 ))}
               </div>
@@ -296,11 +410,60 @@ export default function ProfilePage() {
               </label>
               <input
                 type="text"
-                placeholder="Город, улица, дом..."
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                placeholder={`Город (${config?.delivery?.city || 'Чебоксары'})`}
+                value={address.city || ''}
+                onChange={(e) => setAddress((prev) => ({ ...prev, city: e.target.value }))}
                 style={{
                   width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-light)',
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <input
+                type="text"
+                placeholder="Улица"
+                value={address.street}
+                onChange={(e) => setAddress((prev) => ({ ...prev, street: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-light)',
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                placeholder="Дом"
+                value={address.house}
+                onChange={(e) => setAddress((prev) => ({ ...prev, house: e.target.value }))}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-light)',
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Квартира"
+                value={address.apartment || ''}
+                onChange={(e) => setAddress((prev) => ({ ...prev, apartment: e.target.value }))}
+                style={{
+                  flex: 1,
                   padding: '12px',
                   borderRadius: '8px',
                   border: '1px solid var(--border-light)',
@@ -376,10 +539,10 @@ export default function ProfilePage() {
                       Заказ #{order.order_number}
                     </div>
                     <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                      Статус: {order.status}
+                      Статус: {getStatusLabel(order.status)}
                     </div>
                     <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                      Оплата: {order.payment_status}
+                      Оплата: {getPaymentStatusLabel(order.payment_status)}
                     </div>
                     <div style={{ fontSize: '14px', marginBottom: '4px' }}>
                       Сумма: {Number(order.total).toLocaleString('ru-RU')} ₽
@@ -387,6 +550,90 @@ export default function ProfilePage() {
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                       {new Date(order.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
                     </div>
+                    <button
+                      onClick={() => handleToggleOrder(order.id)}
+                      style={{
+                        marginTop: '10px',
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-light)',
+                        backgroundColor: 'var(--bg-surface)',
+                        color: 'var(--text-primary)',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {expandedOrderId === order.id ? 'Скрыть детали' : 'Подробнее'}
+                    </button>
+                    {expandedOrderId === order.id && (
+                      <div style={{ marginTop: '12px', fontSize: '14px' }}>
+                        {orderDetailsLoading[order.id] && (
+                          <div style={{ color: 'var(--text-secondary)' }}>Загрузка деталей...</div>
+                        )}
+                        {orderDetails[order.id] && (
+                          <>
+                            <div style={{ marginBottom: '8px' }}>
+                              <div>Оплата: {getPaymentTypeLabel(orderDetails[order.id].payment_type)}</div>
+                              <div>
+                                Доставка: {orderDetails[order.id].delivery_type === 'delivery' ? 'Доставка' : 'Самовывоз'}
+                              </div>
+                              {orderDetails[order.id].delivery_type === 'delivery' && orderDetails[order.id].delivery_address && (
+                                <div>
+                                  Адрес: {[
+                                    orderDetails[order.id].delivery_address?.city,
+                                    orderDetails[order.id].delivery_address?.street,
+                                    orderDetails[order.id].delivery_address?.house,
+                                  ].filter(Boolean).join(', ')}
+                                  {orderDetails[order.id].delivery_address?.apartment
+                                    ? `, кв. ${orderDetails[order.id].delivery_address?.apartment}`
+                                    : ''}
+                                </div>
+                              )}
+                              {orderDetails[order.id].delivery_date && orderDetails[order.id].delivery_time && (
+                                <div>
+                                  Дата/время: {orderDetails[order.id].delivery_date} {orderDetails[order.id].delivery_time}
+                                </div>
+                              )}
+                              {orderDetails[order.id].recipient_name && (
+                                <div>
+                                  Получатель: {orderDetails[order.id].recipient_name} ({orderDetails[order.id].recipient_phone})
+                                </div>
+                              )}
+                              {orderDetails[order.id].card_text && (
+                                <div>Открытка: {orderDetails[order.id].card_text}</div>
+                              )}
+                              {orderDetails[order.id].comment && (
+                                <div>Комментарий: {orderDetails[order.id].comment}</div>
+                              )}
+                            </div>
+                            <div style={{ marginBottom: '8px' }}>
+                              <strong>Состав заказа:</strong>
+                              <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {orderDetails[order.id].items.map((item, idx) => (
+                                  <div key={`${item.product_name}-${idx}`}>
+                                    {item.product_name} × {item.quantity} = {Number(item.total).toLocaleString('ru-RU')} ₽
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            {orderDetails[order.id].history?.length ? (
+                              <div>
+                                <strong>История:</strong>
+                                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  {orderDetails[order.id].history?.map((entry, idx) => (
+                                    <div key={`${entry.status}-${idx}`} style={{ color: 'var(--text-secondary)' }}>
+                                      {new Date(entry.changed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} — {getStatusLabel(entry.status)}
+                                      {entry.comment ? ` (${entry.comment})` : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
