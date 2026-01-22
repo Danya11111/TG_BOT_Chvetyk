@@ -21,7 +21,6 @@ export default function CheckoutPage() {
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'confirmed' | 'rejected'>('idle');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [receiptFileName, setReceiptFileName] = useState<string | null>(null);
@@ -158,7 +157,6 @@ export default function CheckoutPage() {
     const initData = getTelegramInitData();
     if (!initData) {
       const errorMessage = 'Не удалось получить данные Telegram. Откройте mini app из бота.';
-      setSubmitError(errorMessage);
       showAlert(errorMessage);
       return;
     }
@@ -175,7 +173,6 @@ export default function CheckoutPage() {
     }
 
     setLoading(true);
-    setSubmitError(null);
     setStatusMessage(null);
 
     try {
@@ -194,7 +191,6 @@ export default function CheckoutPage() {
         (error as any)?.response?.data?.error?.message ||
         (error as Error)?.message ||
         'Произошла ошибка при оформлении заказа. Попробуйте позже.';
-      setSubmitError(errorMessage);
       showAlert(errorMessage);
     } finally {
       setLoading(false);
@@ -445,7 +441,6 @@ export default function CheckoutPage() {
   };
 
   const isOrderLocked = orderId !== null;
-  const isConfirmDisabled = loading || !orderId;
   const sbpEnabled = Boolean(customerConfig?.sbpQr?.enabled);
   const sbpLabel = sbpEnabled
     ? 'Оплата по QR-коду СБП'
