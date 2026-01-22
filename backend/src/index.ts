@@ -70,6 +70,23 @@ async function startServer(): Promise<void> {
     logger.info('Starting Telegram Bot...');
     try {
       await startBot();
+      
+      // Периодическая проверка webhook (каждые 5 минут)
+      setInterval(async () => {
+        try {
+          const { getBot } = await import('./bot/bot');
+          const bot = getBot();
+          const webhookInfo = await bot.telegram.getWebhookInfo();
+          if (!webhookInfo.url && config.apiUrl) {
+            logger.warn('Webhook was removed, re-setting...');
+            const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
+            await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: false });
+            logger.info('✅ Webhook re-set:', { url: webhookUrl });
+          }
+        } catch (error) {
+          logger.debug('Webhook check failed:', error);
+        }
+      }, 5 * 60 * 1000); // Каждые 5 минут
     } catch (error) {
       logger.error('Failed to start Telegram Bot:', error);
       logger.warn('Continuing without bot...');

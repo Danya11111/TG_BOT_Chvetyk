@@ -129,16 +129,31 @@ export async function startBot(): Promise<void> {
         logger.warn('Polling failed, attempting to use webhook instead...');
         try {
           const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
-          await botInstance.telegram.setWebhook(webhookUrl, {
+          logger.info(`Setting webhook to: ${webhookUrl}`);
+          
+          const setWebhookResult = await botInstance.telegram.setWebhook(webhookUrl, {
             drop_pending_updates: true,
           });
-          logger.info(`✅ Webhook set successfully: ${webhookUrl}`);
-          logger.info('🚀 Bot will receive updates via webhook instead of polling');
+          
+          logger.info('Webhook set result:', { result: setWebhookResult });
+          
+          // Проверяем, что webhook действительно установлен
+          const verifyWebhook = await botInstance.telegram.getWebhookInfo();
+          if (verifyWebhook.url === webhookUrl) {
+            logger.info(`✅ Webhook verified and set successfully: ${webhookUrl}`);
+            logger.info('🚀 Bot will receive updates via webhook instead of polling');
+          } else {
+            logger.warn('Webhook set but verification failed:', { 
+              expected: webhookUrl, 
+              actual: verifyWebhook.url 
+            });
+          }
         } catch (webhookError: any) {
           logger.error('Failed to set webhook:', {
             errorMessage: webhookError?.message,
             errorCode: webhookError?.response?.error_code,
             errorDescription: webhookError?.response?.description,
+            webhookUrl: `${config.apiUrl}/api/telegram/webhook`,
           });
           logger.warn('Bot will not be available, but server continues running');
           logger.error('❌ CRITICAL: Bot cannot start due to 409 conflict.');
@@ -148,7 +163,7 @@ export async function startBot(): Promise<void> {
           logger.error('   2. Check other servers/containers using this bot token');
           logger.error('   3. Or wait for the other instance to stop naturally');
           logger.warn('💡 Manual webhook setup:');
-          logger.warn(`   curl -X POST "https://api.telegram.org/bot${config.telegram.botToken.substring(0, 10)}.../setWebhook?url=${config.apiUrl}/api/telegram/webhook"`);
+          logger.warn(`   curl -X POST "https://api.telegram.org/bot${config.telegram.botToken.substring(0, 10)}.../setWebhook?url=${config.apiUrl}/api/telegram/webhook&drop_pending_updates=true"`);
         }
       }
     } else {
