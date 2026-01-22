@@ -11,6 +11,7 @@ export interface ProfileAddress {
 interface ProfileStore {
   addresses: ProfileAddress[];
   addAddress: (address: ProfileAddress) => void;
+  updateAddress: (index: number, address: ProfileAddress) => void;
   removeAddress: (index: number) => void;
   clearAddresses: () => void;
 }
@@ -24,6 +25,16 @@ export const useProfileStore = create<ProfileStore>()(
         set((state) => ({
           addresses: [...state.addresses, address],
         }));
+      },
+      
+      updateAddress: (index, address) => {
+        set((state) => {
+          const newAddresses = [...state.addresses];
+          if (index >= 0 && index < newAddresses.length) {
+            newAddresses[index] = address;
+          }
+          return { addresses: newAddresses };
+        });
       },
       
       removeAddress: (index) => {

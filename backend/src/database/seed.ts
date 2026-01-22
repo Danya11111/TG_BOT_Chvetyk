@@ -19,7 +19,9 @@ async function runSeeds(): Promise<void> {
       join(process.cwd(), 'dist', 'database', 'seeds', '001_sample_data.sql'),
       // Для development (исходный код)
       join(process.cwd(), 'src', 'database', 'seeds', '001_sample_data.sql'),
-      // Для Docker
+      // Для Docker production
+      '/app/dist/database/seeds/001_sample_data.sql',
+      // Для Docker development
       '/app/src/database/seeds/001_sample_data.sql',
     ];
 

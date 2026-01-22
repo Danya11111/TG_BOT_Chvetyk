@@ -37,7 +37,8 @@ async function runMigrations(): Promise<void> {
     const migrationDirs = [
       join(process.cwd(), 'dist', 'database', 'migrations'),
       join(process.cwd(), 'src', 'database', 'migrations'),
-      '/app/src/database/migrations',
+      '/app/dist/database/migrations', // Production путь в Docker
+      '/app/src/database/migrations', // Fallback для development в Docker
     ];
 
     const migrationDir = migrationDirs.find((dir) => existsSync(dir));

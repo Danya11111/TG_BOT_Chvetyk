@@ -20,6 +20,7 @@ export default function ProfilePage() {
     house: '',
     apartment: '',
   });
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [orders, setOrders] = useState<OrdersListItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function ProfilePage() {
   
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
-  const { addresses, addAddress } = useProfileStore();
+  const { addresses, addAddress, updateAddress, removeAddress } = useProfileStore();
   const { config } = useCustomerConfig();
 
   // Получаем данные пользователя из Telegram
@@ -46,11 +47,13 @@ export default function ProfilePage() {
     WebApp.MainButton.hide();
   }, []);
 
+  // Устанавливаем город по умолчанию только один раз при загрузке конфигурации
   useEffect(() => {
     if (!address.city && config?.delivery?.city) {
       setAddress((prev) => ({ ...prev, city: config.delivery.city }));
     }
-  }, [address.city, config?.delivery?.city]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config?.delivery?.city]); // Убрали address.city из зависимостей, чтобы не перезаписывать при изменении пользователем
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -94,19 +97,103 @@ export default function ProfilePage() {
     };
   }, [activeTab]);
 
+  // Функция для добавления префиксов к адресу
+  const formatAddressForSave = (addr: ProfileAddress): ProfileAddress => {
+    let city = addr.city?.trim() || '';
+    let street = addr.street.trim() || '';
+    
+    // Добавляем префикс "г. " для города, если его еще нет
+    if (city && !city.match(/^г\.\s*/i)) {
+      city = `г. ${city}`;
+    }
+    
+    // Добавляем префикс "ул. " для улицы, если его еще нет
+    if (street && !street.match(/^(ул\.|улица|проспект|пр\.|переулок|пер\.|бульвар|б-р|площадь|пл\.)\s*/i)) {
+      street = `ул. ${street}`;
+    }
+    
+    return {
+      city: city || undefined,
+      street,
+      house: addr.house.trim(),
+      apartment: addr.apartment?.trim() || undefined,
+    };
+  };
+
+  // Функция для удаления префиксов из адреса (для редактирования)
+  const removeAddressPrefixes = (addr: ProfileAddress): ProfileAddress => {
+    let city = addr.city || '';
+    let street = addr.street || '';
+    
+    // Убираем префикс "г. " из города
+    city = city.replace(/^г\.\s*/i, '').trim();
+    
+    // Убираем префиксы из улицы (ул., улица, проспект и т.д.)
+    street = street.replace(/^(ул\.|улица|проспект|пр\.|переулок|пер\.|бульвар|б-р|площадь|пл\.)\s*/i, '').trim();
+    
+    return {
+      city: city || undefined,
+      street,
+      house: addr.house || '',
+      apartment: addr.apartment || undefined,
+    };
+  };
+
   const handleSaveAddress = () => {
     if (address.street.trim() && address.house.trim()) {
-      addAddress({
-        city: address.city?.trim(),
-        street: address.street.trim(),
-        house: address.house.trim(),
-        apartment: address.apartment?.trim(),
-      });
+      const addressToSave = formatAddressForSave(address);
+
+      if (editingIndex !== null) {
+        updateAddress(editingIndex, addressToSave);
+        WebApp.showAlert('Адрес обновлен!');
+        setEditingIndex(null);
+      } else {
+        addAddress(addressToSave);
+        WebApp.showAlert('Адрес сохранен!');
+      }
+      
       setAddress({ city: '', street: '', house: '', apartment: '' });
-      WebApp.showAlert('Адрес сохранен!');
       return;
     }
     WebApp.showAlert('Укажите улицу и дом.');
+  };
+
+  const handleEditAddress = (index: number) => {
+    const addr = addresses[index];
+    // Убираем префиксы при редактировании, чтобы пользователь видел чистые значения
+    const addressWithoutPrefixes = removeAddressPrefixes(addr);
+    setAddress({
+      city: addressWithoutPrefixes.city || '',
+      street: addressWithoutPrefixes.street || '',
+      house: addressWithoutPrefixes.house || '',
+      apartment: addressWithoutPrefixes.apartment || '',
+    });
+    setEditingIndex(index);
+    // Прокрутка к форме
+    setTimeout(() => {
+      const formElement = document.querySelector('[data-address-form]');
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 100);
+  };
+
+  const handleDeleteAddress = (index: number) => {
+    WebApp.showConfirm('Удалить этот адрес?', (confirmed) => {
+      if (confirmed) {
+        removeAddress(index);
+        WebApp.showAlert('Адрес удален');
+        if (editingIndex === index) {
+          setEditingIndex(null);
+          setAddress({ city: '', street: '', house: '', apartment: '' });
+        }
+      }
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setAddress({ city: '', street: '', house: '', apartment: '' });
   };
 
   const formatAddress = (addr: ProfileAddress) => {
@@ -389,14 +476,72 @@ export default function ProfilePage() {
                       backgroundColor: 'var(--bg-secondary)',
                       borderRadius: '8px',
                       marginBottom: '8px',
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px'
                     }}
                   >
-                    {formatAddress(addr)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {formatAddress(addr)}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => handleEditAddress(index)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-light)',
+                          backgroundColor: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Изменить
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAddress(index)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-light)',
+                          backgroundColor: 'var(--bg-surface)',
+                          color: '#e74c3c',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Удалить
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+
+            <div data-address-form>
+              {editingIndex !== null && (
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  border: '2px solid var(--color-accent)'
+                }}>
+                  <div style={{
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    marginBottom: '8px',
+                    color: 'var(--text-primary)'
+                  }}>
+                    Редактирование адреса
+                  </div>
+                </div>
+              )}
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{
@@ -441,7 +586,7 @@ export default function ProfilePage() {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'stretch' }}>
               <input
                 type="text"
                 placeholder="Дом"
@@ -449,12 +594,14 @@ export default function ProfilePage() {
                 onChange={(e) => setAddress((prev) => ({ ...prev, house: e.target.value }))}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   padding: '12px',
                   borderRadius: '8px',
                   border: '1px solid var(--border-light)',
                   fontSize: '14px',
                   color: 'var(--text-primary)',
-                  backgroundColor: 'var(--bg-surface)'
+                  backgroundColor: 'var(--bg-surface)',
+                  boxSizing: 'border-box'
                 }}
               />
               <input
@@ -464,31 +611,52 @@ export default function ProfilePage() {
                 onChange={(e) => setAddress((prev) => ({ ...prev, apartment: e.target.value }))}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   padding: '12px',
                   borderRadius: '8px',
                   border: '1px solid var(--border-light)',
                   fontSize: '14px',
                   color: 'var(--text-primary)',
-                  backgroundColor: 'var(--bg-surface)'
+                  backgroundColor: 'var(--bg-surface)',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
-            <button
-              onClick={handleSaveAddress}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: 'var(--color-accent)',
-                color: 'var(--text-on-accent)',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer'
-              }}
-            >
-              Сохранить
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleSaveAddress}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: 'var(--color-accent)',
+                  color: 'var(--text-on-accent)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                {editingIndex !== null ? 'Сохранить изменения' : 'Сохранить'}
+              </button>
+              {editingIndex !== null && (
+                <button
+                  onClick={handleCancelEdit}
+                  style={{
+                    padding: '12px 20px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-light)',
+                    backgroundColor: 'var(--bg-surface)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Отмена
+                </button>
+              )}
+            </div>
           </div>
         )}
 

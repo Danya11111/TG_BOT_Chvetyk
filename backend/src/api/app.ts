@@ -20,6 +20,8 @@ import pickupRoutes from './routes/pickup.routes';
 import configRoutes from './routes/config.routes';
 import { telegramAuthMiddleware } from './middlewares/telegram-auth';
 import { readRateLimiter, writeRateLimiter } from './middlewares/rate-limit';
+import { testConnection } from '../database/connection';
+import { testRedisConnection } from '../database/redis';
 
 export function createApp(): Express {
   const app = express();
@@ -91,9 +93,6 @@ export function createApp(): Express {
 
   // Health check with database and Redis status
   app.get('/health', async (req, res) => {
-    const { testConnection } = await import('../database/connection');
-    const { testRedisConnection } = await import('../database/redis');
-    
     const checks: Record<string, boolean | string> = {
       timestamp: new Date().toISOString(),
     };
