@@ -13,9 +13,12 @@
     "dev:monolith": "concurrently \"npm --prefix ../frontend run dev\" \"npm run dev\"",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "migrate": "tsx src/database/migrate.ts",
+    "migrate": "node scripts/migrate-runner.js",
+    "migrate:dev": "tsx src/database/migrate.ts",
+    "migrate:prod": "node dist/database/migrate.js",
     "migrate:sql": "psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f src/database/migrations/001_initial_schema.sql",
-    "seed": "tsx src/database/seed.ts"
+    "seed": "tsx src/database/seed.ts",
+    "seed:prod": "node dist/database/seed.js"
   },
   "keywords": [
     "telegram",
