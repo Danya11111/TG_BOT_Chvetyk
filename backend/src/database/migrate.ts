@@ -94,7 +94,6 @@ async function runMigrations(): Promise<void> {
 // Проверяем, запущен ли файл напрямую (через node или tsx)
 const isMainModule = 
   typeof require !== 'undefined' && require.main === module ||
-  import.meta.url === `file://${process.argv[1]}` ||
   process.argv[1]?.endsWith('migrate.js') ||
   process.argv[1]?.endsWith('migrate.ts');
 
