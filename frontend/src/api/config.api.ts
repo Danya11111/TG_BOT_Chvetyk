@@ -17,7 +17,6 @@ export interface CustomerConfigResponse {
       vk?: string;
     };
     links: {
-      site?: string;
       yandexMaps?: string;
     };
   };

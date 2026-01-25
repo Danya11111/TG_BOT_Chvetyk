@@ -46,221 +46,117 @@ export function getBot(): Telegraf {
 export async function startBot(): Promise<void> {
   const botInstance = getBot();
   
-  // Проверяем, установлен ли webhook
+  // ВСЕГДА сначала очищаем webhook, чтобы использовать polling
   try {
     const webhookInfo = await botInstance.telegram.getWebhookInfo();
     if (webhookInfo.url) {
-      logger.info('✅ Webhook already set, bot will receive updates via webhook:', { url: webhookInfo.url });
-      // Если webhook установлен, не пытаемся запустить polling
-      return;
+      logger.info('Webhook found, clearing it to use polling mode:', { url: webhookInfo.url });
+      await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      logger.info('Webhook cleared, starting polling...');
+    } else {
+      logger.info('No webhook set, attempting to start polling...');
     }
-    logger.info('No webhook set, attempting to start polling...');
   } catch (webhookError) {
     logger.debug('Webhook info check failed, attempting polling:', webhookError);
   }
   
-  // Если webhook не установлен, пытаемся запустить polling
+  // Пытаемся запустить polling с агрессивными retry
   let pollingSuccess = false;
-  try {
-    logger.info('Attempting to start bot in polling mode...');
-    await botInstance.launch();
-    logger.info('🚀 Telegram Bot started (polling mode)');
-    pollingSuccess = true;
-  } catch (error: any) {
-    // Логируем полную информацию об ошибке для диагностики
-    logger.error('Bot launch error details:', {
-      errorMessage: error?.message,
-      errorCode: error?.response?.error_code,
-      errorDescription: error?.response?.description,
-      errorStack: error?.stack,
-      errorType: typeof error,
-      errorKeys: error ? Object.keys(error) : [],
-    });
-    
-    // Проверяем, это ли ошибка 409 (конфликт getUpdates)
-    const is409Error = 
-      error?.response?.error_code === 409 || 
-      error?.response?.description?.includes('Conflict') ||
-      error?.response?.description?.includes('getUpdates') ||
-      error?.message?.includes('409') || 
-      error?.message?.includes('Conflict') ||
-      String(error).includes('409');
-    
+  const maxRetries = 5;
+  const retryDelays = [5, 10, 15, 20, 30]; // секунды
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`Attempting to start bot in polling mode (attempt ${attempt}/${maxRetries})...`);
+      
+      // Очищаем webhook перед каждой попыткой
+      try {
+        await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (deleteError) {
+        // Игнорируем ошибки удаления webhook
+      }
+      
+      await botInstance.launch();
+      logger.info('🚀 Telegram Bot started (polling mode)');
+      pollingSuccess = true;
+      break;
+    } catch (error: any) {
+      // Логируем информацию об ошибке
+      const is409Error = 
+        error?.response?.error_code === 409 || 
+        error?.response?.description?.includes('Conflict') ||
+        error?.response?.description?.includes('getUpdates') ||
+        error?.message?.includes('409') || 
+        error?.message?.includes('Conflict') ||
+        String(error).includes('409');
+      
       if (is409Error) {
-      logger.warn('Bot conflict detected (409), attempting to resolve...');
-      
-      // Сначала пробуем сразу установить webhook (быстрее, чем ждать retry)
-      logger.info('Attempting to set webhook immediately as fallback...');
-      try {
-        const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
-        logger.info(`Setting webhook to: ${webhookUrl}`);
-        
-        // Очищаем webhook несколько раз для надежности
-        try {
-          await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-          logger.info('Webhook cleared before setting new one');
-          await new Promise(resolve => setTimeout(resolve, 500)); // Небольшая задержка
-        } catch (deleteError) {
-          logger.debug('Webhook delete error (may not exist):', deleteError);
-        }
-        
-        // Устанавливаем webhook
-        const setWebhookResult = await botInstance.telegram.setWebhook(webhookUrl, {
-          drop_pending_updates: true,
-          allowed_updates: ['message', 'callback_query', 'inline_query', 'chosen_inline_result'],
+        logger.warn(`Bot conflict detected (409) on attempt ${attempt}/${maxRetries}:`, {
+          errorMessage: error?.message,
+          errorCode: error?.response?.error_code,
         });
         
-        logger.info('Webhook set result:', { result: setWebhookResult });
-        
-        // Проверяем несколько раз с задержками, так как Telegram может проверять endpoint
-        let verified = false;
-        for (let checkAttempt = 1; checkAttempt <= 5; checkAttempt++) {
-          await new Promise(resolve => setTimeout(resolve, 2000 * checkAttempt)); // 2, 4, 6, 8, 10 секунд
-          const verifyWebhook = await botInstance.telegram.getWebhookInfo();
-          logger.info(`Webhook verification attempt ${checkAttempt}/5:`, {
-            url: verifyWebhook.url,
-            pendingUpdates: verifyWebhook.pending_update_count,
-            expected: webhookUrl,
-          });
-          
-          if (verifyWebhook.url === webhookUrl) {
-            logger.info(`✅ Webhook verified and set successfully: ${webhookUrl}`);
-            logger.info('🚀 Bot will receive updates via webhook instead of polling');
-            verified = true;
-            break;
-          } else if (verifyWebhook.url && verifyWebhook.url !== '') {
-            logger.warn('Webhook URL mismatch:', { 
-              expected: webhookUrl, 
-              actual: verifyWebhook.url 
-            });
-            // Пробуем переустановить
-            try {
-              await botInstance.telegram.setWebhook(webhookUrl, {
-                drop_pending_updates: false,
-                allowed_updates: ['message', 'callback_query', 'inline_query', 'chosen_inline_result'],
-              });
-              logger.info('Webhook re-set due to URL mismatch');
-            } catch (resetError) {
-              logger.error('Failed to re-set webhook:', resetError);
-            }
-          } else {
-            logger.warn(`Webhook verification attempt ${checkAttempt}/5: URL is empty, Telegram may have removed it`);
-          }
-        }
-        
-        if (verified) {
-          return; // Успешно установили webhook, выходим
+        if (attempt < maxRetries) {
+          const delay = retryDelays[attempt - 1];
+          logger.info(`Waiting ${delay} seconds before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay * 1000));
+          continue; // Пробуем снова
         } else {
-          logger.error('Webhook could not be verified after 5 attempts. Telegram may be removing it due to endpoint issues.');
-          logger.error('Check that the endpoint is publicly accessible and returns 200 OK immediately.');
+          logger.error('Failed to start bot after all polling retries');
         }
-      } catch (webhookError: any) {
-        logger.warn('Immediate webhook setup failed, will retry polling:', {
-          errorMessage: webhookError?.message,
-          errorCode: webhookError?.response?.error_code,
-          errorDescription: webhookError?.response?.description,
+      } else {
+        logger.error('Bot launch error (non-409):', {
+          errorMessage: error?.message,
+          errorCode: error?.response?.error_code,
+          errorDescription: error?.response?.description,
         });
+        break; // Для не-409 ошибок не retry
       }
+    }
+  }
+  
+  // Если polling не удался, пробуем webhook как последний вариант
+  if (!pollingSuccess) {
+    logger.warn('Polling failed, attempting to use webhook as last resort...');
+    try {
+      const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
+      logger.info(`Setting webhook to: ${webhookUrl}`);
       
-      // Пробуем несколько раз с увеличивающейся задержкой
-      logger.info('Retrying polling with delays...');
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          // Очищаем webhook еще раз
-          await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-          logger.info(`Webhook cleared during conflict resolution (attempt ${attempt}/3)`);
-          
-          // Ждем с увеличивающейся задержкой: 10, 20, 30 секунд
-          const waitTime = attempt * 10;
-          logger.info(`Waiting ${waitTime} seconds before retry (attempt ${attempt}/3)...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
-          
-          // Пробуем запустить снова с таймаутом
-          logger.info(`Retrying bot launch (attempt ${attempt}/3)...`);
-          
-          // Используем Promise.race для таймаута
-          const launchPromise = botInstance.launch();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Launch timeout after 15 seconds')), 15000)
-          );
-          
-          await Promise.race([launchPromise, timeoutPromise]);
-          logger.info('🚀 Telegram Bot started after conflict resolution');
-          pollingSuccess = true;
-          break;
-        } catch (retryError: any) {
-          logger.warn(`Bot launch retry ${attempt}/3 failed:`, {
-            errorMessage: retryError?.message,
-            errorCode: retryError?.response?.error_code,
-            errorDescription: retryError?.response?.description,
-          });
-          
-          if (attempt === 3) {
-            logger.error('Failed to start bot after 3 retry attempts');
-          }
-        }
-      }
+      await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Если polling все еще не работает, пробуем webhook еще раз
-      if (!pollingSuccess) {
-        logger.warn('Polling failed after all retries, attempting to use webhook as final fallback...');
-        try {
-          const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
-          logger.info(`Setting webhook to: ${webhookUrl}`);
-          
-          await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-          const setWebhookResult = await botInstance.telegram.setWebhook(webhookUrl, {
-            drop_pending_updates: true,
-          });
-          
-          logger.info('Webhook set result:', { result: setWebhookResult });
-          
-          // Проверяем, что webhook действительно установлен
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Даем больше времени
-          const verifyWebhook = await botInstance.telegram.getWebhookInfo();
-          if (verifyWebhook.url === webhookUrl) {
-            logger.info(`✅ Webhook verified and set successfully: ${webhookUrl}`);
-            logger.info('🚀 Bot will receive updates via webhook instead of polling');
-            return; // Успешно установили webhook
-          } else {
-            logger.error('Webhook set but verification failed:', { 
-              expected: webhookUrl, 
-              actual: verifyWebhook.url,
-              webhookInfo: verifyWebhook
-            });
-          }
-        } catch (webhookError: any) {
-          logger.error('Failed to set webhook (final attempt):', {
-            errorMessage: webhookError?.message,
-            errorCode: webhookError?.response?.error_code,
-            errorDescription: webhookError?.response?.description,
-            webhookUrl: `${config.apiUrl}/api/telegram/webhook`,
-          });
-          logger.warn('Bot will not be available, but server continues running');
-          logger.error('❌ CRITICAL: Bot cannot start due to 409 conflict.');
-          logger.error('❌ Another bot instance is running elsewhere with the same token.');
-          logger.error('❌ To fix this, you need to:');
-          logger.error('   1. Find and stop the other bot instance');
-          logger.error('   2. Check other servers/containers using this bot token');
-          logger.error('   3. Or wait for the other instance to stop naturally');
-          logger.warn('💡 Manual webhook setup:');
-          logger.warn(`   curl -X POST "https://api.telegram.org/bot${config.telegram.botToken.substring(0, 10)}.../setWebhook?url=${config.apiUrl}/api/telegram/webhook&drop_pending_updates=true"`);
-        }
-      }
-    } else {
-      logger.error('Failed to start bot (non-409 error):', error);
-      // Для других ошибок тоже пробуем webhook
-      logger.warn('Attempting webhook as fallback for non-409 error...');
-      try {
-        const webhookUrl = `${config.apiUrl}/api/telegram/webhook`;
-        await botInstance.telegram.setWebhook(webhookUrl, {
-          drop_pending_updates: true,
-        });
+      const setWebhookResult = await botInstance.telegram.setWebhook(webhookUrl, {
+        drop_pending_updates: true,
+        allowed_updates: ['message', 'callback_query', 'inline_query', 'chosen_inline_result'],
+      });
+      
+      logger.info('Webhook set result:', { result: setWebhookResult });
+      
+      // Проверяем через 3 секунды
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const verifyWebhook = await botInstance.telegram.getWebhookInfo();
+      if (verifyWebhook.url === webhookUrl) {
         logger.info(`✅ Webhook set as fallback: ${webhookUrl}`);
-      } catch (webhookError) {
-        logger.error('Webhook fallback also failed:', webhookError);
-        logger.warn('Bot will not be available, but server continues running');
+        logger.warn('⚠️ Note: Webhook may be removed by Telegram if endpoint is not accessible');
+      } else {
+        logger.error('❌ Webhook fallback failed:', {
+          expected: webhookUrl,
+          actual: verifyWebhook.url || '(empty)',
+        });
+        logger.error('❌ Bot cannot start. Please check:');
+        logger.error('   1. No other bot instances are running with the same token');
+        logger.error('   2. Webhook endpoint is publicly accessible');
+        logger.error('   3. Server firewall allows incoming connections');
       }
+    } catch (webhookError: any) {
+      logger.error('Failed to set webhook (final attempt):', {
+        errorMessage: webhookError?.message,
+        errorCode: webhookError?.response?.error_code,
+        errorDescription: webhookError?.response?.description,
+      });
+      logger.error('❌ Bot cannot start. Please check for other bot instances or network issues.');
     }
   }
 }

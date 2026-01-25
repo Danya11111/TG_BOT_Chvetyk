@@ -24,7 +24,6 @@ export const customerData = {
       vk: 'https://vk.com/torgflowers',
     },
     links: {
-      site: 'https://cvety-cheboksary.ru',
       yandexMaps: 'https://yandex.ru/profile/47796378484?lang=ru',
     },
   },

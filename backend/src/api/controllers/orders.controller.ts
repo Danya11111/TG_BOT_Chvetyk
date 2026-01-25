@@ -5,6 +5,8 @@ import { db } from '../../database/connection';
 import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { notifyManagerPaymentReceipt, notifyManagerPaymentRequest } from '../../bot/notifications';
 import { logger } from '../../utils/logger';
+import { posifloraOrderService } from '../../integrations/posiflora/order.service';
+import { config } from '../../config';
 
 interface CreateOrderPayload {
   customer: {
@@ -156,6 +158,21 @@ class OrdersController {
         : { rows: [] as Array<{ id: number }> };
       const existingProductIds = new Set(existingProductsResult.rows.map((row) => row.id));
 
+      const posifloraIdsResult = productIds.length
+        ? await client.query(
+            `SELECT id, posiflora_id FROM products WHERE id = ANY($1::int[])`,
+            [productIds]
+          )
+        : { rows: [] as Array<{ id: number; posiflora_id: string | null }> };
+      const posifloraIdMap = new Map(
+        posifloraIdsResult.rows
+          .filter((row) => row.posiflora_id)
+          .map((row) => [row.id, row.posiflora_id as string])
+      );
+      const posifloraMissingItems = payload.items.filter(
+        (item) => !posifloraIdMap.get(item.productId)
+      );
+
       for (const item of payload.items) {
         const resolvedProductId = existingProductIds.has(item.productId) ? item.productId : null;
         await client.query(
@@ -187,6 +204,57 @@ class OrdersController {
       );
 
       await client.query('COMMIT');
+
+      try {
+        if (config.posiflora.enabled && !posifloraMissingItems.length) {
+          const posifloraOrderId = await posifloraOrderService.createOrder({
+            orderId: order.id,
+            orderNumber: order.order_number,
+            customer: {
+              name: payload.customer.name,
+              phone: payload.customer.phone,
+              email: payload.customer.email || null,
+            },
+            recipient: {
+              name: payload.recipient.name,
+              phone: payload.recipient.phone,
+            },
+            delivery: {
+              type: payload.delivery.type,
+              date: payload.delivery.date,
+              time: payload.delivery.time,
+              address: payload.delivery.type === 'delivery' ? payload.delivery.address : null,
+            },
+            comment: payload.comment || null,
+            cardText: payload.cardText,
+            items: payload.items.map((item) => ({
+              posifloraId: posifloraIdMap.get(item.productId)!,
+              name: item.productName,
+              price: item.price,
+              quantity: item.quantity,
+            })),
+          });
+
+          if (posifloraOrderId) {
+            await db.query(
+              'UPDATE orders SET posiflora_order_id = $1 WHERE id = $2',
+              [posifloraOrderId, order.id]
+            );
+          }
+        } else if (config.posiflora.enabled && posifloraMissingItems.length) {
+          logger.warn('Posiflora sync skipped: missing product mapping', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            missingProductIds: posifloraMissingItems.map((item) => item.productId),
+          });
+        }
+      } catch (error) {
+        logger.error('Posiflora order sync failed', {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       res.json(
         buildSuccessResponse({

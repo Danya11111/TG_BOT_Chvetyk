@@ -42,22 +42,26 @@ export const config = {
     webappUrl: process.env.WEBAPP_URL || 'http://localhost:5173',
   },
   
-  // Posiflora API (будет заполнено позже)
+  // Posiflora API
   posiflora: {
+    enabled: process.env.POSIFLORA_ENABLED === 'true',
     apiUrl: process.env.POSIFLORA_API_URL || '',
-    apiKey: process.env.POSIFLORA_API_KEY || '',
-    // Дополнительные настройки будут добавлены позже
-  },
-
-  // Скрейпер каталога с сайта клиента
-  scraper: {
-    baseUrl: process.env.SCRAPER_BASE_URL || 'https://cvety-cheboksary.ru',
-    cron: process.env.SCRAPER_CRON || '0 * * * *', // ежечасно
-    enabled: process.env.SCRAPER_ENABLED !== 'false',
-    maxProducts: parseInt(process.env.SCRAPER_MAX_PRODUCTS || '500', 10),
-    sectionUrls: process.env.SCRAPER_SECTION_URLS
-      ? process.env.SCRAPER_SECTION_URLS.split(',').map((url) => url.trim()).filter(Boolean)
-      : [],
+    username: process.env.POSIFLORA_USERNAME || '',
+    password: process.env.POSIFLORA_PASSWORD || '',
+    storeId: process.env.POSIFLORA_STORE_ID || '',
+    orderSourceId: process.env.POSIFLORA_ORDER_SOURCE_ID || '',
+    customerSourceId: process.env.POSIFLORA_CUSTOMER_SOURCE_ID || '',
+    createdByWorkerId: process.env.POSIFLORA_CREATED_BY_WORKER_ID || '',
+    defaultCountryCode: parseInt(process.env.POSIFLORA_DEFAULT_COUNTRY_CODE || '7', 10),
+    deliveryTimeWindowMinutes: parseInt(process.env.POSIFLORA_DELIVERY_TIME_WINDOW_MINUTES || '60', 10),
+    requestTimeoutMs: parseInt(process.env.POSIFLORA_REQUEST_TIMEOUT_MS || '15000', 10),
+    syncEnabled: process.env.POSIFLORA_SYNC_ENABLED === 'true',
+    syncCron: process.env.POSIFLORA_SYNC_CRON || '0 * * * *',
+    syncOnStartup: process.env.POSIFLORA_SYNC_ON_STARTUP !== 'false',
+    catalogPageSize: parseInt(process.env.POSIFLORA_CATALOG_PAGE_SIZE || '50', 10),
+    includeItemDetails: process.env.POSIFLORA_INCLUDE_ITEM_DETAILS !== 'false',
+    customersSyncEnabled: process.env.POSIFLORA_CUSTOMERS_SYNC_ENABLED === 'true',
+    customersPageSize: parseInt(process.env.POSIFLORA_CUSTOMERS_PAGE_SIZE || '50', 10),
   },
   
   // Managers for notifications

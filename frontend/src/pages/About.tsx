@@ -114,15 +114,12 @@ export default function AboutPage() {
               <a href={config.contacts.social.vk} target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)' }}>VK</a>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-            <span style={{ fontWeight: 600 }}>Ссылки:</span>
-            {config?.contacts?.links?.site && (
-              <a href={config.contacts.links.site} target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)' }}>Официальный сайт</a>
-            )}
-            {config?.contacts?.links?.yandexMaps && (
+          {config?.contacts?.links?.yandexMaps && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+              <span style={{ fontWeight: 600 }}>Ссылки:</span>
               <a href={config.contacts.links.yandexMaps} target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)' }}>Яндекс.Карты</a>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

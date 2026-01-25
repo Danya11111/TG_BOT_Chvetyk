@@ -17,7 +17,6 @@
   - Telegram: @flowerscheb
   - Instagram: @tf_flowers_21
   - VK: https://vk.com/torgflowers
-- Сайт: https://cvety-cheboksary.ru
 - Яндекс.Карты: https://yandex.ru/profile/47796378484?lang=ru
 
 ## Доставка

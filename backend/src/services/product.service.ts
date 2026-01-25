@@ -4,7 +4,6 @@ import { NotFoundError } from '../utils/errors';
 import { cache } from '../database/redis';
 import { CACHE_TTL } from '../utils/constants';
 import { PaginationResult } from '../types/pagination';
-import sampleCatalog from '../data/sample-catalog.json';
 
 export interface Product {
   id: number;
@@ -46,75 +45,7 @@ export interface ProductsResponse {
 }
 
 export class ProductService {
-  private useSample = process.env.USE_SAMPLE_PRODUCTS === 'true';
-
-  private filterAndPaginate(products: Product[], filters: ProductFilters): ProductsResponse {
-    let result = [...products];
-    const {
-      categoryId,
-      categorySlug,
-      search,
-      inStock,
-      minPrice,
-      maxPrice,
-      page = 1,
-      limit = 20,
-      sort = 'newest',
-    } = filters;
-
-    if (categoryId) {
-      result = result.filter((p) => p.category_id === categoryId);
-    }
-    if (categorySlug) {
-      // map slug via categories from sample
-      const category = sampleCatalog.categories.find((c) => c.slug === categorySlug);
-      if (category) {
-        result = result.filter((p) => p.category_id === category.id);
-      }
-    }
-    if (search) {
-      const term = search.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(term) ||
-          (p.description || '').toLowerCase().includes(term)
-      );
-    }
-    if (inStock !== undefined) {
-      result = result.filter((p) => p.in_stock === inStock);
-    }
-    if (minPrice !== undefined) {
-      result = result.filter((p) => p.price >= minPrice);
-    }
-    if (maxPrice !== undefined) {
-      result = result.filter((p) => p.price <= maxPrice);
-    }
-
-    let order = (a: Product, b: Product) => b.id - a.id;
-    if (sort === 'price_asc') order = (a, b) => a.price - b.price;
-    if (sort === 'price_desc') order = (a, b) => b.price - a.price;
-    if (sort === 'oldest') order = (a, b) => a.id - b.id;
-    result = result.sort(order);
-
-    const total = result.length;
-    const start = (page - 1) * limit;
-    const paged = result.slice(start, start + limit);
-
-    return {
-      data: paged,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
   async getProducts(filters: ProductFilters = {}): Promise<ProductsResponse> {
-    if (this.useSample) {
-      return this.filterAndPaginate(sampleCatalog.products as unknown as Product[], filters);
-    }
     try {
       const {
         categoryId,
@@ -236,17 +167,11 @@ export class ProductService {
       return response;
     } catch (error) {
       logger.error('Error fetching products:', error);
-      // fallback to sample data
-      this.useSample = true;
-      return this.filterAndPaginate(sampleCatalog.products as unknown as Product[], filters);
+      throw error;
     }
   }
 
   async getProductById(id: number): Promise<Product> {
-    if (this.useSample) {
-      const sample = sampleCatalog.products.find((p) => p.id === id);
-      if (sample) return sample as unknown as Product;
-    }
     try {
       const cacheKey = `product:${id}`;
       const cached = await cache.get<Product>(cacheKey);
@@ -298,11 +223,6 @@ export class ProductService {
       return product;
     } catch (error) {
       logger.error(`Error fetching product ${id}:`, error);
-      // fallback to sample
-      const sample = sampleCatalog.products.find((p) => p.id === id);
-      if (sample) {
-        return sample as unknown as Product;
-      }
       throw error;
     }
   }

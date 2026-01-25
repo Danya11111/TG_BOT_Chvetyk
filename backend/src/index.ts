@@ -4,7 +4,7 @@ import { logger } from './utils/logger';
 import { testConnection } from './database/connection';
 import { runMigrations } from './database/migrate';
 import { startBot } from './bot/bot';
-import { startScraperScheduler } from './scraper/scheduler';
+import { startPosifloraScheduler } from './integrations/posiflora/scheduler';
 
 async function startServer(): Promise<void> {
   try {
@@ -142,12 +142,12 @@ async function startServer(): Promise<void> {
       logger.warn('Continuing without bot...');
     }
 
-    // Запуск скрейпера каталога (ежечасно)
+    // Запуск синхронизации Posiflora
     try {
-      startScraperScheduler();
+      startPosifloraScheduler();
     } catch (error) {
-      logger.error('Failed to start scraper scheduler:', error);
-      logger.warn('Continuing without scraper...');
+      logger.error('Failed to start Posiflora sync scheduler:', error);
+      logger.warn('Continuing without Posiflora sync...');
     }
 
     // Graceful shutdown
