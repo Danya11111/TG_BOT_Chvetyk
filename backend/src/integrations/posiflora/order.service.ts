@@ -150,7 +150,7 @@ class PosifloraOrderService {
     const lines = payload.items.map((item) => {
       const amount = item.price * item.quantity;
       return {
-        type: 'order-lines',
+        type: 'order-lines' as const,
         attributes: {
           amount: formatAmount(amount),
           discountPrice: formatAmount(item.price),
