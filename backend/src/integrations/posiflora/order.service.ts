@@ -147,7 +147,8 @@ class PosifloraOrderService {
     ].filter(Boolean);
 
     const normalizedRecipientPhone = normalizePhone(payload.recipient.phone);
-    const lines = payload.items.map((item) => {
+    const lines: PosifloraOrderRequest['data']['relationships']['lines']['data'] =
+      payload.items.map((item) => {
       const amount = item.price * item.quantity;
       return {
         type: 'order-lines' as const,
@@ -164,7 +165,7 @@ class PosifloraOrderService {
           bouquet: { data: null },
           item: {
             data: {
-              type: 'inventory-items',
+              type: 'inventory-items' as const,
               id: item.posifloraId,
             },
           },
