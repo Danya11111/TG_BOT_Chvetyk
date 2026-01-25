@@ -24,5 +24,6 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}"
             git pull
             docker compose up -d --build
+            docker compose exec -T backend npm run migrate
           debug: true
           use_insecure_cipher: false
