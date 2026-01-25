@@ -39,6 +39,68 @@ interface PosifloraOrderPayload {
   items: PosifloraOrderItem[];
 }
 
+interface PosifloraOrderRequest {
+  data: {
+    type: 'orders';
+    attributes: {
+      status: string;
+      date: string;
+      docNo: string;
+      description: string;
+      budget: number;
+      delivery: boolean;
+      deliveryComments: string;
+      deliveryCity: string;
+      deliveryStreet: string;
+      deliveryHouse: string;
+      deliveryApartment: string;
+      deliveryBuilding: string;
+      deliveryContact: string;
+      deliveryPhoneNumber: string;
+      deliveryPhoneCode: string;
+      dueTime: string | null;
+      deliveryTimeFrom: string | null;
+      deliveryTimeTo: string | null;
+      createdAt: string;
+      updatedAt: string;
+      fiscal: boolean;
+      byBonuses: boolean;
+    };
+    relationships: {
+      store: {
+        data: { type: 'stores'; id: string };
+      };
+      source: {
+        data: { type: 'order-sources'; id: string };
+      };
+      customer: { data: { type: 'customers'; id: string } } | null;
+      lines: {
+        data: Array<{
+          type: 'order-lines';
+          attributes: {
+            amount: string;
+            discountPrice: string;
+            manualSetting: boolean;
+            price: string;
+            qty: string;
+            totalAmount: string;
+            totalAmountWithDiscount: string;
+          };
+          relationships: {
+            bouquet: { data: null };
+            item: { data: { type: 'inventory-items'; id: string } };
+          };
+        }>;
+      };
+      images: { data: [] };
+      discounts: { data: [] };
+      courier: { data: null };
+      florist: { data: null };
+      createdBy?: { data: { type: 'workers'; id: string } };
+    };
+  };
+}
+
 const formatAmount = (value: number): string => value.toFixed(2);
 
 const buildDateTime = (date: string, time?: string | null): string | null => {
@@ -110,7 +172,7 @@ class PosifloraOrderService {
       };
     });
 
-    const orderPayload = {
+    const orderPayload: PosifloraOrderRequest = {
       data: {
         type: 'orders',
         attributes: {
