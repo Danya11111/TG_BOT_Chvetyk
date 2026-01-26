@@ -100,6 +100,12 @@ const extractComposition = (value?: string | null): string | null => {
   return (stop >= 0 ? tail.slice(0, stop) : tail).trim() || null;
 };
 
+const extractQuotedTitle = (value?: string | null): string | null => {
+  if (!value) return null;
+  const match = value.match(/[«"“„](.+?)[»"”]/);
+  return match?.[1]?.trim() || null;
+};
+
 async function fetchCatalogCategories(): Promise<CatalogCategory[]> {
   const response = await posifloraApiClient.request<CatalogCategoryResponse>({
     method: 'GET',
@@ -236,7 +242,8 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
         const rawDescription = inventoryDetails?.data?.attributes?.description || null;
         const description = stripHtml(rawDescription);
         const composition = extractComposition(rawDescription);
-        const name = inventoryDetails?.data?.attributes?.title || item.attributes.title;
+        const rawTitle = inventoryDetails?.data?.attributes?.title || item.attributes.title;
+        const name = extractQuotedTitle(rawTitle) || rawTitle;
         const categoryId = item.relationships?.category?.data?.id || category.id;
         const dbCategoryId = categoryIdMap.get(categoryId) || null;
         const catalogPrice = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
