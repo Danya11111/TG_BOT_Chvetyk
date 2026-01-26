@@ -80,6 +80,34 @@ interface InventoryItemsResponse {
   };
 }
 
+interface BouquetAttributes {
+  title?: string;
+  description?: string | null;
+  amount?: number | string | null;
+  saleAmount?: number | string | null;
+  trueSaleAmount?: number | string | null;
+  status?: string;
+  public?: boolean;
+}
+
+interface Bouquet {
+  id: string;
+  type: 'bouquets';
+  attributes?: BouquetAttributes;
+  relationships?: {
+    store?: { data: { id: string; type: 'stores' } | null };
+    logo?: { data: { id: string; type: 'images' } | null };
+  };
+}
+
+interface BouquetsResponse {
+  data: Bouquet[];
+  meta?: {
+    page?: { number?: number; size?: number };
+    total?: number;
+  };
+}
+
 interface InventoryItemResponse {
   data: {
     id: string;
@@ -225,6 +253,38 @@ async function fetchInventoryItems(): Promise<InventoryItem[]> {
   return items;
 }
 
+async function fetchBouquets(): Promise<Bouquet[]> {
+  const items: Bouquet[] = [];
+  const pageSize = config.posiflora.catalogPageSize;
+  let page = 1;
+  let total = 0;
+
+  do {
+    const response = await posifloraApiClient.request<BouquetsResponse>({
+      method: 'GET',
+      url: '/bouquets',
+      params: {
+        'page[number]': page,
+        'page[size]': pageSize,
+      },
+    });
+
+    items.push(...(response.data || []));
+    total = response.meta?.total || items.length;
+    const size = response.meta?.page?.size || pageSize;
+    const number = response.meta?.page?.number || page;
+
+    if (items.length >= total || !response.data?.length) {
+      break;
+    }
+
+    page = number + 1;
+    if (size === 0) break;
+  } while (items.length < total);
+
+  return items;
+}
+
 async function fetchInventoryItem(itemId: string): Promise<InventoryItemResponse | null> {
   try {
     return await posifloraApiClient.request<InventoryItemResponse>({
@@ -266,8 +326,7 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
 
   logger.info('Posiflora catalog sync started');
   const catalogCategories = await fetchCatalogCategories();
-  const useCatalog = catalogCategories.length > 0;
-  const categories = (useCatalog ? catalogCategories : await fetchCategories()).filter(
+  const categories = (catalogCategories.length ? catalogCategories : await fetchCategories()).filter(
     (category) =>
       category.attributes?.status !== 'off' &&
       !category.attributes?.deleted
@@ -328,166 +387,74 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     await productsClient.query('BEGIN');
 
     const seenPosifloraIds = new Set<string>();
-    if (useCatalog) {
-      for (const category of categories) {
-        const items = await fetchCatalogItemsByCategory(category.id);
-        for (const item of items) {
-          const posifloraId = item.attributes.itemId;
-          if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
-          seenPosifloraIds.add(posifloraId);
+    const items = await fetchBouquets();
+    for (const item of items) {
+      const posifloraId = item.id;
+      if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
+      seenPosifloraIds.add(posifloraId);
 
-          const inventoryDetails = config.posiflora.includeItemDetails
-            ? await fetchInventoryItem(posifloraId)
-            : null;
-          const rawDescription = inventoryDetails?.data?.attributes?.description || null;
-          const description = stripHtml(rawDescription);
-          const composition = extractComposition(rawDescription);
-          const rawTitle = inventoryDetails?.data?.attributes?.title || item.attributes.title;
-          const name = extractQuotedTitle(rawTitle) || rawTitle;
-          const categoryId = item.relationships?.category?.data?.id || category.id;
-          const dbCategoryId = categoryIdMap.get(categoryId) || null;
-          const catalogPrice = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
-          const inventoryPrice = resolvePrice(
-            inventoryDetails?.data?.attributes?.priceMin,
-            inventoryDetails?.data?.attributes?.priceMax
-          );
-          const price = catalogPrice > 0 ? catalogPrice : inventoryPrice;
-          const inStock =
-            typeof inventoryDetails?.data?.attributes?.public === 'boolean'
-              ? inventoryDetails.data.attributes.public
-              : Boolean(item.attributes.public);
+      const rawDescription = item.attributes?.description || null;
+      const description = stripHtml(rawDescription);
+      const composition = extractComposition(rawDescription) || description;
+      const rawTitle = item.attributes?.title || 'Без названия';
+      const name = extractQuotedTitle(rawTitle) || rawTitle;
+      const dbCategoryId = null;
+      const price =
+        resolvePrice(item.attributes?.saleAmount, item.attributes?.amount) ||
+        resolvePrice(item.attributes?.trueSaleAmount, item.attributes?.amount);
+      const inStock =
+        typeof item.attributes?.public === 'boolean'
+          ? item.attributes.public
+          : item.attributes?.status === 'demonstrated';
 
-          await productsClient.query(
-            `
-            INSERT INTO products (
-              posiflora_id,
-              name,
-              description,
-              price,
-              old_price,
-              currency,
-              category_id,
-              images,
-              in_stock,
-              stock_quantity,
-              attributes,
-              updated_at
-            ) VALUES (
-              $1, $2, $3, $4, $5, 'RUB', $6, $7, $8, $9, $10, NOW()
-            )
-            ON CONFLICT (posiflora_id) DO UPDATE
-              SET name = EXCLUDED.name,
-                  description = EXCLUDED.description,
-                  price = EXCLUDED.price,
-                  old_price = EXCLUDED.old_price,
-                  category_id = EXCLUDED.category_id,
-                  images = EXCLUDED.images,
-                  in_stock = EXCLUDED.in_stock,
-                  stock_quantity = EXCLUDED.stock_quantity,
-                  attributes = EXCLUDED.attributes,
-                  updated_at = NOW();
-          `,
-            [
-              posifloraId,
-              name,
-              description,
-              price,
-              null,
-              dbCategoryId,
-              JSON.stringify([]),
-              inStock,
-              inStock ? 1 : 0,
-              JSON.stringify({
-                source: 'posiflora',
-                itemType: item.attributes.itemType,
-                revision: item.attributes.revision,
-                logoId: item.relationships?.logo?.data?.id || null,
-                composition,
-                descriptionRaw: rawDescription,
-              }),
-            ]
-          );
-        }
-      }
-    } else {
-      const items = await fetchInventoryItems();
-      for (const item of items) {
-        const posifloraId = item.id;
-        if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
-        seenPosifloraIds.add(posifloraId);
-
-        const inventoryDetails = config.posiflora.includeItemDetails
-          ? await fetchInventoryItem(posifloraId)
-          : null;
-        const rawDescription = inventoryDetails?.data?.attributes?.description || item.attributes?.description || null;
-        const description = stripHtml(rawDescription);
-        const composition = extractComposition(rawDescription);
-        const rawTitle =
-          inventoryDetails?.data?.attributes?.title || item.attributes?.title || 'Без названия';
-        const name = extractQuotedTitle(rawTitle) || rawTitle;
-        const categoryId = item.relationships?.category?.data?.id;
-        const dbCategoryId = categoryId ? categoryIdMap.get(categoryId) || null : null;
-        const listPrice = resolvePrice(item.attributes?.priceMin, item.attributes?.priceMax);
-        const inventoryPrice = resolvePrice(
-          inventoryDetails?.data?.attributes?.priceMin,
-          inventoryDetails?.data?.attributes?.priceMax
-        );
-        const price = listPrice > 0 ? listPrice : inventoryPrice;
-        const inStock =
-          typeof item.attributes?.public === 'boolean'
-            ? item.attributes.public
-            : Boolean(inventoryDetails?.data?.attributes?.public);
-
-        await productsClient.query(
-          `
-          INSERT INTO products (
-            posiflora_id,
-            name,
-            description,
-            price,
-            old_price,
-            currency,
-            category_id,
-            images,
-            in_stock,
-            stock_quantity,
-            attributes,
-            updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, 'RUB', $6, $7, $8, $9, $10, NOW()
-          )
-          ON CONFLICT (posiflora_id) DO UPDATE
-            SET name = EXCLUDED.name,
-                description = EXCLUDED.description,
-                price = EXCLUDED.price,
-                old_price = EXCLUDED.old_price,
-                category_id = EXCLUDED.category_id,
-                images = EXCLUDED.images,
-                in_stock = EXCLUDED.in_stock,
-                stock_quantity = EXCLUDED.stock_quantity,
-                attributes = EXCLUDED.attributes,
-                updated_at = NOW();
-        `,
-          [
-            posifloraId,
-            name,
-            description,
-            price,
-            null,
-            dbCategoryId,
-            JSON.stringify([]),
-            inStock,
-            inStock ? 1 : 0,
-            JSON.stringify({
-              source: 'posiflora',
-              itemType: item.attributes?.itemType,
-              logoId: item.relationships?.logo?.data?.id || null,
-              composition,
-              descriptionRaw: rawDescription,
-            }),
-          ]
-        );
-      }
+      await productsClient.query(
+        `
+        INSERT INTO products (
+          posiflora_id,
+          name,
+          description,
+          price,
+          old_price,
+          currency,
+          category_id,
+          images,
+          in_stock,
+          stock_quantity,
+          attributes,
+          updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, 'RUB', $6, $7, $8, $9, $10, NOW()
+        )
+        ON CONFLICT (posiflora_id) DO UPDATE
+          SET name = EXCLUDED.name,
+              description = EXCLUDED.description,
+              price = EXCLUDED.price,
+              old_price = EXCLUDED.old_price,
+              category_id = EXCLUDED.category_id,
+              images = EXCLUDED.images,
+              in_stock = EXCLUDED.in_stock,
+              stock_quantity = EXCLUDED.stock_quantity,
+              attributes = EXCLUDED.attributes,
+              updated_at = NOW();
+      `,
+        [
+          posifloraId,
+          name,
+          description,
+          price,
+          null,
+          dbCategoryId,
+          JSON.stringify([]),
+          inStock,
+          inStock ? 1 : 0,
+          JSON.stringify({
+            source: 'posiflora-bouquets',
+            logoId: item.relationships?.logo?.data?.id || null,
+            composition,
+            descriptionRaw: rawDescription,
+          }),
+        ]
+      );
     }
 
     if (seenPosifloraIds.size) {
