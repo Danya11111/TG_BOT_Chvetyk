@@ -461,11 +461,11 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
       const idsArray = Array.from(seenPosifloraIds);
       await productsClient.query(
         `
-          UPDATE products
-          SET in_stock = false, updated_at = NOW()
-          WHERE posiflora_id IS NOT NULL AND posiflora_id NOT IN (${idsArray
-            .map((_, index) => `$${index + 1}`)
-            .join(', ')})
+          DELETE FROM products
+          WHERE (attributes->>'source' IS DISTINCT FROM 'posiflora-bouquets')
+             OR (posiflora_id IS NOT NULL AND posiflora_id NOT IN (${idsArray
+               .map((_, index) => `$${index + 1}`)
+               .join(', ')}))
         `,
         idsArray
       );
