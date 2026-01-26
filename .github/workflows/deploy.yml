@@ -27,5 +27,6 @@ jobs:
             docker compose up -d --build
             sleep 10
             docker compose exec -T backend npm run migrate
+            docker compose exec -T backend npm run posiflora:sync
           debug: true
           use_insecure_cipher: false
