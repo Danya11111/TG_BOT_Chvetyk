@@ -29,8 +29,19 @@ export function startPosifloraScheduler(): void {
     return;
   }
 
-  logger.info(`Posiflora sync scheduled: "${config.posiflora.syncCron}"`);
-  cron.schedule(config.posiflora.syncCron, runSync);
+  const fallbackCron = '0 * * * *';
+  const cronExpression =
+    config.posiflora.syncCron && cron.validate(config.posiflora.syncCron)
+      ? config.posiflora.syncCron
+      : fallbackCron;
+  if (cronExpression !== config.posiflora.syncCron) {
+    logger.warn('Posiflora sync: invalid cron expression, using hourly fallback', {
+      configured: config.posiflora.syncCron,
+      fallback: fallbackCron,
+    });
+  }
+  logger.info(`Posiflora sync scheduled: "${cronExpression}"`);
+  cron.schedule(cronExpression, runSync);
 
   if (config.posiflora.syncOnStartup) {
     runSync().catch((error) => logger.error('Posiflora sync initial run failed', error));
