@@ -53,6 +53,33 @@ interface CatalogItemsResponse {
   };
 }
 
+interface InventoryItemAttributes {
+  title?: string;
+  description?: string | null;
+  itemType?: string;
+  priceMin?: number | string | null;
+  priceMax?: number | string | null;
+  public?: boolean;
+}
+
+interface InventoryItem {
+  id: string;
+  type: 'inventory-items';
+  attributes?: InventoryItemAttributes;
+  relationships?: {
+    category?: { data: { id: string; type: 'categories' } | null };
+    logo?: { data: { id: string; type: 'images' } | null };
+  };
+}
+
+interface InventoryItemsResponse {
+  data: InventoryItem[];
+  meta?: {
+    page?: { number?: number; size?: number };
+    total?: number;
+  };
+}
+
 interface InventoryItemResponse {
   data: {
     id: string;
@@ -122,6 +149,14 @@ async function fetchCatalogCategories(): Promise<CatalogCategory[]> {
   return response.data || [];
 }
 
+async function fetchCategories(): Promise<CatalogCategory[]> {
+  const response = await posifloraApiClient.request<CatalogCategoryResponse>({
+    method: 'GET',
+    url: '/categories',
+  });
+  return response.data || [];
+}
+
 async function fetchCatalogItemsByCategory(categoryId: string): Promise<CatalogItem[]> {
   const items: CatalogItem[] = [];
   const pageSize = config.posiflora.catalogPageSize;
@@ -154,6 +189,42 @@ async function fetchCatalogItemsByCategory(categoryId: string): Promise<CatalogI
   return items;
 }
 
+async function fetchInventoryItems(): Promise<InventoryItem[]> {
+  const items: InventoryItem[] = [];
+  const pageSize = config.posiflora.catalogPageSize;
+  let page = 1;
+  let total = 0;
+
+  do {
+    const response = await posifloraApiClient.request<InventoryItemsResponse>({
+      method: 'GET',
+      url: '/inventory-items',
+      params: {
+        'page[number]': page,
+        'page[size]': pageSize,
+        'filter[dataSource]': 'both',
+        'filter[store]': config.posiflora.storeId || undefined,
+        'filter[hasActivePrices]': true,
+        public: true,
+      },
+    });
+
+    items.push(...(response.data || []));
+    total = response.meta?.total || items.length;
+    const size = response.meta?.page?.size || pageSize;
+    const number = response.meta?.page?.number || page;
+
+    if (items.length >= total || !response.data?.length) {
+      break;
+    }
+
+    page = number + 1;
+    if (size === 0) break;
+  } while (items.length < total);
+
+  return items;
+}
+
 async function fetchInventoryItem(itemId: string): Promise<InventoryItemResponse | null> {
   try {
     return await posifloraApiClient.request<InventoryItemResponse>({
@@ -161,10 +232,28 @@ async function fetchInventoryItem(itemId: string): Promise<InventoryItemResponse
       url: `/catalog/inventory-items/${itemId}`,
     });
   } catch (error) {
-    logger.warn('Posiflora: failed to load inventory item details', {
-      itemId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    try {
+      const fallback = await posifloraApiClient.request<InventoryItemsResponse>({
+        method: 'GET',
+        url: '/inventory-items',
+        params: {
+          'page[number]': 1,
+          'page[size]': 1,
+          'filter[id]': [itemId],
+          'filter[dataSource]': 'both',
+          'filter[store]': config.posiflora.storeId || undefined,
+        },
+      });
+      const item = fallback.data?.[0];
+      if (item) {
+        return { data: item };
+      }
+    } catch (fallbackError) {
+      logger.warn('Posiflora: failed to load inventory item details', {
+        itemId,
+        error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+      });
+    }
     return null;
   }
 }
@@ -176,7 +265,9 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
   }
 
   logger.info('Posiflora catalog sync started');
-  const categories = (await fetchCatalogCategories()).filter(
+  const catalogCategories = await fetchCatalogCategories();
+  const useCatalog = catalogCategories.length > 0;
+  const categories = (useCatalog ? catalogCategories : await fetchCategories()).filter(
     (category) =>
       category.attributes?.status !== 'off' &&
       !category.attributes?.deleted
@@ -237,33 +328,115 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     await productsClient.query('BEGIN');
 
     const seenPosifloraIds = new Set<string>();
-    for (const category of categories) {
-      const items = await fetchCatalogItemsByCategory(category.id);
+    if (useCatalog) {
+      for (const category of categories) {
+        const items = await fetchCatalogItemsByCategory(category.id);
+        for (const item of items) {
+          const posifloraId = item.attributes.itemId;
+          if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
+          seenPosifloraIds.add(posifloraId);
+
+          const inventoryDetails = config.posiflora.includeItemDetails
+            ? await fetchInventoryItem(posifloraId)
+            : null;
+          const rawDescription = inventoryDetails?.data?.attributes?.description || null;
+          const description = stripHtml(rawDescription);
+          const composition = extractComposition(rawDescription);
+          const rawTitle = inventoryDetails?.data?.attributes?.title || item.attributes.title;
+          const name = extractQuotedTitle(rawTitle) || rawTitle;
+          const categoryId = item.relationships?.category?.data?.id || category.id;
+          const dbCategoryId = categoryIdMap.get(categoryId) || null;
+          const catalogPrice = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
+          const inventoryPrice = resolvePrice(
+            inventoryDetails?.data?.attributes?.priceMin,
+            inventoryDetails?.data?.attributes?.priceMax
+          );
+          const price = catalogPrice > 0 ? catalogPrice : inventoryPrice;
+          const inStock =
+            typeof inventoryDetails?.data?.attributes?.public === 'boolean'
+              ? inventoryDetails.data.attributes.public
+              : Boolean(item.attributes.public);
+
+          await productsClient.query(
+            `
+            INSERT INTO products (
+              posiflora_id,
+              name,
+              description,
+              price,
+              old_price,
+              currency,
+              category_id,
+              images,
+              in_stock,
+              stock_quantity,
+              attributes,
+              updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, 'RUB', $6, $7, $8, $9, $10, NOW()
+            )
+            ON CONFLICT (posiflora_id) DO UPDATE
+              SET name = EXCLUDED.name,
+                  description = EXCLUDED.description,
+                  price = EXCLUDED.price,
+                  old_price = EXCLUDED.old_price,
+                  category_id = EXCLUDED.category_id,
+                  images = EXCLUDED.images,
+                  in_stock = EXCLUDED.in_stock,
+                  stock_quantity = EXCLUDED.stock_quantity,
+                  attributes = EXCLUDED.attributes,
+                  updated_at = NOW();
+          `,
+            [
+              posifloraId,
+              name,
+              description,
+              price,
+              null,
+              dbCategoryId,
+              JSON.stringify([]),
+              inStock,
+              inStock ? 1 : 0,
+              JSON.stringify({
+                source: 'posiflora',
+                itemType: item.attributes.itemType,
+                revision: item.attributes.revision,
+                logoId: item.relationships?.logo?.data?.id || null,
+                composition,
+                descriptionRaw: rawDescription,
+              }),
+            ]
+          );
+        }
+      }
+    } else {
+      const items = await fetchInventoryItems();
       for (const item of items) {
-        const posifloraId = item.attributes.itemId;
+        const posifloraId = item.id;
         if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
         seenPosifloraIds.add(posifloraId);
 
         const inventoryDetails = config.posiflora.includeItemDetails
           ? await fetchInventoryItem(posifloraId)
           : null;
-        const rawDescription = inventoryDetails?.data?.attributes?.description || null;
+        const rawDescription = inventoryDetails?.data?.attributes?.description || item.attributes?.description || null;
         const description = stripHtml(rawDescription);
         const composition = extractComposition(rawDescription);
-        const rawTitle = inventoryDetails?.data?.attributes?.title || item.attributes.title;
+        const rawTitle =
+          inventoryDetails?.data?.attributes?.title || item.attributes?.title || 'Без названия';
         const name = extractQuotedTitle(rawTitle) || rawTitle;
-        const categoryId = item.relationships?.category?.data?.id || category.id;
-        const dbCategoryId = categoryIdMap.get(categoryId) || null;
-        const catalogPrice = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
+        const categoryId = item.relationships?.category?.data?.id;
+        const dbCategoryId = categoryId ? categoryIdMap.get(categoryId) || null : null;
+        const listPrice = resolvePrice(item.attributes?.priceMin, item.attributes?.priceMax);
         const inventoryPrice = resolvePrice(
           inventoryDetails?.data?.attributes?.priceMin,
           inventoryDetails?.data?.attributes?.priceMax
         );
-        const price = catalogPrice > 0 ? catalogPrice : inventoryPrice;
+        const price = listPrice > 0 ? listPrice : inventoryPrice;
         const inStock =
-          typeof inventoryDetails?.data?.attributes?.public === 'boolean'
-            ? inventoryDetails.data.attributes.public
-            : Boolean(item.attributes.public);
+          typeof item.attributes?.public === 'boolean'
+            ? item.attributes.public
+            : Boolean(inventoryDetails?.data?.attributes?.public);
 
         await productsClient.query(
           `
@@ -307,8 +480,7 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
             inStock ? 1 : 0,
             JSON.stringify({
               source: 'posiflora',
-              itemType: item.attributes.itemType,
-              revision: item.attributes.revision,
+              itemType: item.attributes?.itemType,
               logoId: item.relationships?.logo?.data?.id || null,
               composition,
               descriptionRaw: rawDescription,
