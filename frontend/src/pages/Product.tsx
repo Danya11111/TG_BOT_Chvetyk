@@ -261,7 +261,21 @@ export default function ProductPage() {
               lineHeight: 1.6,
               whiteSpace: 'pre-wrap'
             }}>
-              {product.description}
+              {String(product.description)}
+            </p>
+          </div>
+        )}
+
+        {/* Composition */}
+        {product.attributes && (product.attributes as any).composition && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 className="text-h3" style={{ marginBottom: '12px' }}>Состав</h3>
+            <p className="text-body" style={{ 
+              color: 'var(--text-secondary)', 
+              lineHeight: 1.6,
+              whiteSpace: 'pre-wrap'
+            }}>
+              {String((product.attributes as any).composition)}
             </p>
           </div>
         )}

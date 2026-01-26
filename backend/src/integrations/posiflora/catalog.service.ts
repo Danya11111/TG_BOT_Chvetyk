@@ -84,6 +84,22 @@ const resolvePrice = (minPrice?: number, maxPrice?: number): number => {
   return 0;
 };
 
+const stripHtml = (value?: string | null): string | null => {
+  if (!value) return null;
+  const withoutTags = value.replace(/<[^>]*>/g, ' ');
+  return withoutTags.replace(/\s+/g, ' ').trim() || null;
+};
+
+const extractComposition = (value?: string | null): string | null => {
+  if (!value) return null;
+  const text = stripHtml(value) || '';
+  const match = text.match(/состав[:\-]\s*(.+)/i);
+  if (!match?.[1]) return null;
+  const tail = match[1];
+  const stop = tail.search(/\b(описание|размер|срок|условия|доставка)\b/i);
+  return (stop >= 0 ? tail.slice(0, stop) : tail).trim() || null;
+};
+
 async function fetchCatalogCategories(): Promise<CatalogCategory[]> {
   const response = await posifloraApiClient.request<CatalogCategoryResponse>({
     method: 'GET',
@@ -217,7 +233,9 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
         const inventoryDetails = config.posiflora.includeItemDetails
           ? await fetchInventoryItem(posifloraId)
           : null;
-        const description = inventoryDetails?.data?.attributes?.description || null;
+        const rawDescription = inventoryDetails?.data?.attributes?.description || null;
+        const description = stripHtml(rawDescription);
+        const composition = extractComposition(rawDescription);
         const name = inventoryDetails?.data?.attributes?.title || item.attributes.title;
         const categoryId = item.relationships?.category?.data?.id || category.id;
         const dbCategoryId = categoryIdMap.get(categoryId) || null;
@@ -277,6 +295,8 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
               itemType: item.attributes.itemType,
               revision: item.attributes.revision,
               logoId: item.relationships?.logo?.data?.id || null,
+              composition,
+              descriptionRaw: rawDescription,
             }),
           ]
         );
