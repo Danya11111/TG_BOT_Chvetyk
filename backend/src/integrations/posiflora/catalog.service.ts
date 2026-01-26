@@ -60,8 +60,8 @@ interface InventoryItemResponse {
     attributes?: {
       title?: string;
       description?: string | null;
-      priceMin?: number;
-      priceMax?: number;
+      priceMin?: number | string | null;
+      priceMax?: number | string | null;
       public?: boolean;
     };
     relationships?: {
@@ -78,9 +78,17 @@ const slugify = (text: string): string =>
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
 
-const resolvePrice = (minPrice?: number, maxPrice?: number): number => {
-  if (typeof minPrice === 'number' && minPrice > 0) return minPrice;
-  if (typeof maxPrice === 'number' && maxPrice > 0) return maxPrice;
+const resolvePrice = (minPrice?: number | string | null, maxPrice?: number | string | null): number => {
+  const normalize = (value?: number | string | null): number => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return value;
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const min = normalize(minPrice);
+  const max = normalize(maxPrice);
+  if (min > 0) return min;
+  if (max > 0) return max;
   return 0;
 };
 
@@ -150,7 +158,7 @@ async function fetchInventoryItem(itemId: string): Promise<InventoryItemResponse
   try {
     return await posifloraApiClient.request<InventoryItemResponse>({
       method: 'GET',
-      url: `/inventory-items/${itemId}`,
+      url: `/catalog/inventory-items/${itemId}`,
     });
   } catch (error) {
     logger.warn('Posiflora: failed to load inventory item details', {
