@@ -60,6 +60,9 @@ interface InventoryItemResponse {
     attributes?: {
       title?: string;
       description?: string | null;
+      priceMin?: number;
+      priceMax?: number;
+      public?: boolean;
     };
     relationships?: {
       logo?: { data: { id: string; type: 'images' } | null };
@@ -218,8 +221,16 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
         const name = inventoryDetails?.data?.attributes?.title || item.attributes.title;
         const categoryId = item.relationships?.category?.data?.id || category.id;
         const dbCategoryId = categoryIdMap.get(categoryId) || null;
-        const price = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
-        const inStock = Boolean(item.attributes.public);
+        const catalogPrice = resolvePrice(item.attributes.minPrice, item.attributes.maxPrice);
+        const inventoryPrice = resolvePrice(
+          inventoryDetails?.data?.attributes?.priceMin,
+          inventoryDetails?.data?.attributes?.priceMax
+        );
+        const price = catalogPrice > 0 ? catalogPrice : inventoryPrice;
+        const inStock =
+          typeof inventoryDetails?.data?.attributes?.public === 'boolean'
+            ? inventoryDetails.data.attributes.public
+            : Boolean(item.attributes.public);
 
         await productsClient.query(
           `
