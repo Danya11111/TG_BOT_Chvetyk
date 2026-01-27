@@ -80,34 +80,6 @@ interface InventoryItemsResponse {
   };
 }
 
-interface BouquetAttributes {
-  title?: string;
-  description?: string | null;
-  amount?: number | string | null;
-  saleAmount?: number | string | null;
-  trueSaleAmount?: number | string | null;
-  status?: string;
-  public?: boolean;
-}
-
-interface Bouquet {
-  id: string;
-  type: 'bouquets';
-  attributes?: BouquetAttributes;
-  relationships?: {
-    store?: { data: { id: string; type: 'stores' } | null };
-    logo?: { data: { id: string; type: 'images' } | null };
-  };
-}
-
-interface BouquetsResponse {
-  data: Bouquet[];
-  meta?: {
-    page?: { number?: number; size?: number };
-    total?: number;
-  };
-}
-
 interface InventoryItemResponse {
   data: {
     id: string;
@@ -253,38 +225,6 @@ async function fetchInventoryItems(): Promise<InventoryItem[]> {
   return items;
 }
 
-async function fetchBouquets(): Promise<Bouquet[]> {
-  const items: Bouquet[] = [];
-  const pageSize = config.posiflora.catalogPageSize;
-  let page = 1;
-  let total = 0;
-
-  do {
-    const response = await posifloraApiClient.request<BouquetsResponse>({
-      method: 'GET',
-      url: '/bouquets',
-      params: {
-        'page[number]': page,
-        'page[size]': pageSize,
-      },
-    });
-
-    items.push(...(response.data || []));
-    total = response.meta?.total || items.length;
-    const size = response.meta?.page?.size || pageSize;
-    const number = response.meta?.page?.number || page;
-
-    if (items.length >= total || !response.data?.length) {
-      break;
-    }
-
-    page = number + 1;
-    if (size === 0) break;
-  } while (items.length < total);
-
-  return items;
-}
-
 async function fetchInventoryItem(itemId: string): Promise<InventoryItemResponse | null> {
   try {
     return await posifloraApiClient.request<InventoryItemResponse>({
@@ -388,25 +328,37 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     await productsClient.query('BEGIN');
 
     const seenPosifloraIds = new Set<string>();
-    const items = await fetchBouquets();
+    const items = await fetchInventoryItems();
     for (const item of items) {
       const posifloraId = item.id;
       if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
       seenPosifloraIds.add(posifloraId);
 
-      const rawDescription = item.attributes?.description || null;
+      const inventoryDetails = config.posiflora.includeItemDetails
+        ? await fetchInventoryItem(posifloraId)
+        : null;
+      const rawDescription =
+        inventoryDetails?.data?.attributes?.description || item.attributes?.description || null;
       const description = stripHtml(rawDescription);
-      const composition = extractComposition(rawDescription) || description;
-      const rawTitle = item.attributes?.title || 'Без названия';
+      const composition = extractComposition(rawDescription) || null;
+      const rawTitle =
+        inventoryDetails?.data?.attributes?.title || item.attributes?.title || 'Без названия';
       const name = extractQuotedTitle(rawTitle) || rawTitle;
-      const dbCategoryId = null;
-      const price =
-        resolvePrice(item.attributes?.saleAmount, item.attributes?.amount) ||
-        resolvePrice(item.attributes?.trueSaleAmount, item.attributes?.amount);
+      const categoryId = item.relationships?.category?.data?.id;
+      const dbCategoryId = categoryId ? categoryIdMap.get(categoryId) || null : null;
+      const listPrice = resolvePrice(item.attributes?.priceMin, item.attributes?.priceMax);
+      const inventoryPrice = resolvePrice(
+        inventoryDetails?.data?.attributes?.priceMin,
+        inventoryDetails?.data?.attributes?.priceMax
+      );
+      const price = listPrice > 0 ? listPrice : inventoryPrice;
+      if (price <= 0) {
+        continue;
+      }
       const inStock =
         typeof item.attributes?.public === 'boolean'
           ? item.attributes.public
-          : item.attributes?.status === 'demonstrated';
+          : Boolean(inventoryDetails?.data?.attributes?.public);
 
       await productsClient.query(
         `
@@ -449,10 +401,11 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
           inStock,
           inStock ? 1 : 0,
           JSON.stringify({
-            source: 'posiflora-bouquets',
+            source: 'posiflora-warehouse',
             logoId: item.relationships?.logo?.data?.id || null,
             composition,
             descriptionRaw: rawDescription,
+            itemType: item.attributes?.itemType,
           }),
         ]
       );
@@ -463,7 +416,7 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
       await productsClient.query(
         `
           DELETE FROM products
-          WHERE (attributes->>'source' IS DISTINCT FROM 'posiflora-bouquets')
+          WHERE (attributes->>'source' IS DISTINCT FROM 'posiflora-warehouse')
              OR (posiflora_id IS NOT NULL AND posiflora_id NOT IN (${idsArray
                .map((_, index) => `$${index + 1}`)
                .join(', ')}))
