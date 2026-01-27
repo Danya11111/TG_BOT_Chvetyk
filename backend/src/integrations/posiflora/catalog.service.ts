@@ -564,5 +564,5 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
 
   await cache.clearPattern('products:*');
   await cache.clearPattern('categories:*');
-  logger.info('Posiflora catalog sync finished', { categories: categories.length });
+  logger.info('Posiflora catalog sync finished', { categories: 1 });
 }
