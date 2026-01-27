@@ -185,6 +185,15 @@ const extractQuotedTitle = (value?: string | null): string | null => {
   return match?.[1]?.trim() || null;
 };
 
+const normalizeTitle = (value?: string | null): string => {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .replace(/[«»"“„”]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+};
+
 const resolvePosifloraImageUrl = (value?: string | null): string | null => {
   if (!value) return null;
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
@@ -343,6 +352,30 @@ async function fetchBouquets(): Promise<{ items: Bouquet[]; included: IncludedRe
 
   return { items, included };
 }
+
+const buildCatalogPriceMap = async (): Promise<Map<string, number>> => {
+  const catalogCategories = await fetchCatalogCategories();
+  const bouquetCategories = catalogCategories.filter((category) =>
+    category.attributes?.title?.toLowerCase().includes('букет')
+  );
+  const categoriesToUse = bouquetCategories.length ? bouquetCategories : catalogCategories;
+  const priceMap = new Map<string, number>();
+
+  for (const category of categoriesToUse) {
+    const items = await fetchCatalogItemsByCategory(category.id);
+    for (const item of items) {
+      const rawTitle = item.attributes?.title || '';
+      const titleKey = normalizeTitle(extractQuotedTitle(rawTitle) || rawTitle);
+      if (!titleKey) continue;
+      const price = resolvePrice(item.attributes?.minPrice, item.attributes?.maxPrice);
+      if (price > 0) {
+        priceMap.set(titleKey, price);
+      }
+    }
+  }
+
+  return priceMap;
+};
 async function fetchInventoryItems(): Promise<InventoryItem[]> {
   const items: InventoryItem[] = [];
   const pageSize = config.posiflora.catalogPageSize;
@@ -457,6 +490,7 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     await productsClient.query('BEGIN');
 
     const seenPosifloraIds = new Set<string>();
+    const catalogPriceMap = await buildCatalogPriceMap();
     const { items, included } = await fetchBouquets();
 
     for (const item of items) {
@@ -470,10 +504,13 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
       const rawTitle = item.attributes?.title || 'Без названия';
       const name = extractQuotedTitle(rawTitle) || rawTitle;
       const dbCategoryId = defaultCategoryId;
-      const price =
+      const bouquetPrice =
         resolveBouquetPrice(item.attributes?.trueSaleAmount) ||
         resolveBouquetPrice(item.attributes?.saleAmount) ||
         resolveBouquetPrice(item.attributes?.amount);
+      const priceLookupKey = normalizeTitle(name);
+      const catalogPrice = priceLookupKey ? catalogPriceMap.get(priceLookupKey) || 0 : 0;
+      const price = bouquetPrice > 0 ? bouquetPrice : catalogPrice;
       if (price <= 0) {
         continue;
       }
