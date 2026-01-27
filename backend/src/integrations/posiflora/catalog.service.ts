@@ -285,7 +285,10 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     for (const category of categories) {
       const name = category.attributes?.title?.trim() || 'Без категории';
       const baseSlug = slugify(name);
-      const slug = baseSlug || `category-${category.id}`;
+      const slug =
+        baseSlug && baseSlug !== '-'
+          ? baseSlug
+          : `category-${category.id}`;
       const result = await client.query(
         `
           INSERT INTO categories (posiflora_id, name, slug, sort_order, is_active, updated_at)
