@@ -53,6 +53,43 @@ interface CatalogItemsResponse {
   };
 }
 
+interface BouquetAttributes {
+  title?: string;
+  description?: string | null;
+  amount?: number | string | null;
+  saleAmount?: number | string | null;
+  trueSaleAmount?: number | string | null;
+  status?: string;
+  public?: boolean;
+}
+
+interface Bouquet {
+  id: string;
+  type: 'bouquets';
+  attributes?: BouquetAttributes;
+  relationships?: {
+    store?: { data: { id: string; type: 'stores' } | null };
+    logo?: { data: { id: string; type: 'images' } | null };
+    image?: { data: { id: string; type: 'images' } | null };
+    images?: { data: { id: string; type: 'images' }[] };
+  };
+}
+
+interface IncludedResource {
+  id: string;
+  type: string;
+  attributes?: Record<string, unknown>;
+}
+
+interface BouquetsResponse {
+  data: Bouquet[];
+  included?: IncludedResource[];
+  meta?: {
+    page?: { number?: number; size?: number };
+    total?: number;
+  };
+}
+
 interface InventoryItemAttributes {
   title?: string;
   description?: string | null;
@@ -119,6 +156,13 @@ const resolvePrice = (minPrice?: number | string | null, maxPrice?: number | str
   return 0;
 };
 
+const resolveBouquetPrice = (value?: number | string | null): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const stripHtml = (value?: string | null): string | null => {
   if (!value) return null;
   const withoutTags = value.replace(/<[^>]*>/g, ' ');
@@ -139,6 +183,79 @@ const extractQuotedTitle = (value?: string | null): string | null => {
   if (!value) return null;
   const match = value.match(/[«"“„](.+?)[»"”]/);
   return match?.[1]?.trim() || null;
+};
+
+const resolvePosifloraImageUrl = (value?: string | null): string | null => {
+  if (!value) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  try {
+    const base = new URL(config.posiflora.apiUrl);
+    const path = value.startsWith('/') ? value : `/${value}`;
+    return `${base.origin}${path}`;
+  } catch {
+    return value;
+  }
+};
+
+const pickImageUrl = (attributes?: Record<string, unknown>): string | null => {
+  if (!attributes) return null;
+  const candidates = [
+    'url',
+    'link',
+    'path',
+    'original',
+    'preview',
+    'medium',
+    'small',
+    'thumb',
+    'thumbnail',
+    'fileUrl',
+    'downloadUrl',
+  ];
+  for (const key of candidates) {
+    const value = attributes[key];
+    if (typeof value === 'string' && value.trim()) {
+      return resolvePosifloraImageUrl(value.trim());
+    }
+  }
+  const sizes = attributes.sizes;
+  if (sizes && typeof sizes === 'object') {
+    const sizeCandidates = ['original', 'large', 'medium', 'small', 'thumb'];
+    for (const sizeKey of sizeCandidates) {
+      const sizeValue = (sizes as Record<string, unknown>)[sizeKey];
+      if (typeof sizeValue === 'string' && sizeValue.trim()) {
+        return resolvePosifloraImageUrl(sizeValue.trim());
+      }
+      if (sizeValue && typeof sizeValue === 'object') {
+        const nestedUrl = (sizeValue as Record<string, unknown>).url;
+        if (typeof nestedUrl === 'string' && nestedUrl.trim()) {
+          return resolvePosifloraImageUrl(nestedUrl.trim());
+        }
+      }
+    }
+  }
+  return null;
+};
+
+const extractImageUrls = (imageIds: string[], included?: IncludedResource[]): string[] => {
+  if (!imageIds.length || !included?.length) {
+    return [];
+  }
+  const includedMap = new Map<string, IncludedResource>();
+  included.forEach((resource) => {
+    if (resource.type === 'images') {
+      includedMap.set(resource.id, resource);
+    }
+  });
+  const urls = new Map<string, string>();
+  for (const imageId of imageIds) {
+    const resource = includedMap.get(imageId);
+    const url = pickImageUrl(resource?.attributes);
+    if (url) {
+      urls.set(url, url);
+    }
+  }
+  return Array.from(urls.values());
 };
 
 async function fetchCatalogCategories(): Promise<CatalogCategory[]> {
@@ -189,6 +306,43 @@ async function fetchCatalogItemsByCategory(categoryId: string): Promise<CatalogI
   return items;
 }
 
+async function fetchBouquets(): Promise<{ items: Bouquet[]; included: IncludedResource[] }> {
+  const items: Bouquet[] = [];
+  const included: IncludedResource[] = [];
+  const pageSize = config.posiflora.catalogPageSize;
+  let page = 1;
+  let total = 0;
+
+  do {
+    const response = await posifloraApiClient.request<BouquetsResponse>({
+      method: 'GET',
+      url: '/bouquets',
+      params: {
+        'page[number]': page,
+        'page[size]': pageSize,
+        include: 'logo,image,images',
+        ...(config.posiflora.storeId ? { 'filter[store]': config.posiflora.storeId } : {}),
+      },
+    });
+
+    items.push(...(response.data || []));
+    if (response.included?.length) {
+      included.push(...response.included);
+    }
+    total = response.meta?.total || items.length;
+    const size = response.meta?.page?.size || pageSize;
+    const number = response.meta?.page?.number || page;
+
+    if (items.length >= total || !response.data?.length) {
+      break;
+    }
+
+    page = number + 1;
+    if (size === 0) break;
+  } while (items.length < total);
+
+  return { items, included };
+}
 async function fetchInventoryItems(): Promise<InventoryItem[]> {
   const items: InventoryItem[] = [];
   const pageSize = config.posiflora.catalogPageSize;
@@ -265,65 +419,37 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
   }
 
   logger.info('Posiflora catalog sync started');
-  const catalogCategories = await fetchCatalogCategories();
-  const categories = (catalogCategories.length ? catalogCategories : await fetchCategories()).filter(
-    (category) =>
-      category.attributes?.status !== 'off' &&
-      !category.attributes?.deleted
-  );
-  const categoryIdMap = new Map<string, number>();
-
-  if (!categories.length) {
-    logger.warn('Posiflora catalog sync: no categories received');
-    return;
-  }
-
-  const client = await pool.connect();
+  const categoryClient = await pool.connect();
+  let defaultCategoryId: number | null = null;
   try {
-    await client.query('BEGIN');
-
-    for (const category of categories) {
-      const name = category.attributes?.title?.trim() || 'Без категории';
-      const baseSlug = slugify(name);
-      const slug =
-        baseSlug && baseSlug !== '-'
-          ? baseSlug
-          : `category-${category.id}`;
-      const result = await client.query(
-        `
-          INSERT INTO categories (posiflora_id, name, slug, sort_order, is_active, updated_at)
-          VALUES ($1, $2, $3, 0, true, NOW())
-          ON CONFLICT (posiflora_id) DO UPDATE
-            SET name = EXCLUDED.name,
-                slug = EXCLUDED.slug,
-                is_active = true,
-                updated_at = NOW()
-          RETURNING id;
-        `,
-        [category.id, name, slug]
-      );
-      categoryIdMap.set(category.id, result.rows[0].id);
-    }
-
-    for (const category of categories) {
-      const parentId = category.relationships?.parent?.data?.id;
-      if (!parentId) continue;
-      const dbCategoryId = categoryIdMap.get(category.id);
-      const dbParentId = categoryIdMap.get(parentId);
-      if (!dbCategoryId || !dbParentId) continue;
-      await client.query('UPDATE categories SET parent_id = $1 WHERE id = $2', [
-        dbParentId,
-        dbCategoryId,
-      ]);
-    }
-
-    await client.query('COMMIT');
+    await categoryClient.query('BEGIN');
+    const result = await categoryClient.query(
+      `
+        INSERT INTO categories (posiflora_id, name, slug, sort_order, is_active, updated_at)
+        VALUES (NULL, $1, $2, 0, true, NOW())
+        ON CONFLICT (slug) DO UPDATE
+          SET name = EXCLUDED.name,
+              is_active = true,
+              updated_at = NOW()
+        RETURNING id;
+      `,
+      ['Букеты', 'bouquets']
+    );
+    defaultCategoryId = result.rows[0]?.id ?? null;
+    await categoryClient.query(
+      `
+        UPDATE categories
+        SET is_active = CASE WHEN slug = 'bouquets' THEN true ELSE false END,
+            updated_at = NOW()
+      `
+    );
+    await categoryClient.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
-    logger.error('Posiflora catalog sync: failed to upsert categories', error);
+    await categoryClient.query('ROLLBACK');
+    logger.error('Posiflora catalog sync: failed to upsert default category', error);
     throw error;
   } finally {
-    client.release();
+    categoryClient.release();
   }
 
   const productsClient = await pool.connect();
@@ -331,37 +457,36 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
     await productsClient.query('BEGIN');
 
     const seenPosifloraIds = new Set<string>();
-    const items = await fetchInventoryItems();
+    const { items, included } = await fetchBouquets();
+
     for (const item of items) {
       const posifloraId = item.id;
       if (!posifloraId || seenPosifloraIds.has(posifloraId)) continue;
       seenPosifloraIds.add(posifloraId);
 
-      const inventoryDetails = config.posiflora.includeItemDetails
-        ? await fetchInventoryItem(posifloraId)
-        : null;
-      const rawDescription =
-        inventoryDetails?.data?.attributes?.description || item.attributes?.description || null;
+      const rawDescription = item.attributes?.description || null;
       const description = stripHtml(rawDescription);
       const composition = extractComposition(rawDescription) || null;
-      const rawTitle =
-        inventoryDetails?.data?.attributes?.title || item.attributes?.title || 'Без названия';
+      const rawTitle = item.attributes?.title || 'Без названия';
       const name = extractQuotedTitle(rawTitle) || rawTitle;
-      const categoryId = item.relationships?.category?.data?.id;
-      const dbCategoryId = categoryId ? categoryIdMap.get(categoryId) || null : null;
-      const listPrice = resolvePrice(item.attributes?.priceMin, item.attributes?.priceMax);
-      const inventoryPrice = resolvePrice(
-        inventoryDetails?.data?.attributes?.priceMin,
-        inventoryDetails?.data?.attributes?.priceMax
-      );
-      const price = listPrice > 0 ? listPrice : inventoryPrice;
+      const dbCategoryId = defaultCategoryId;
+      const price =
+        resolveBouquetPrice(item.attributes?.trueSaleAmount) ||
+        resolveBouquetPrice(item.attributes?.saleAmount) ||
+        resolveBouquetPrice(item.attributes?.amount);
       if (price <= 0) {
         continue;
       }
       const inStock =
         typeof item.attributes?.public === 'boolean'
           ? item.attributes.public
-          : Boolean(inventoryDetails?.data?.attributes?.public);
+          : item.attributes?.status !== 'off';
+      const imageIds = [
+        item.relationships?.logo?.data?.id,
+        item.relationships?.image?.data?.id,
+        ...(item.relationships?.images?.data || []).map((image) => image.id),
+      ].filter((id): id is string => Boolean(id));
+      const images = extractImageUrls(imageIds, included);
 
       await productsClient.query(
         `
@@ -400,15 +525,15 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
           price,
           null,
           dbCategoryId,
-          JSON.stringify([]),
+          JSON.stringify(images),
           inStock,
           inStock ? 1 : 0,
           JSON.stringify({
-            source: 'posiflora-warehouse',
-            logoId: item.relationships?.logo?.data?.id || null,
+            source: 'posiflora-bouquets',
+            imageIds,
             composition,
             descriptionRaw: rawDescription,
-            itemType: item.attributes?.itemType,
+            status: item.attributes?.status || null,
           }),
         ]
       );
@@ -419,7 +544,7 @@ export async function syncCatalogFromPosiflora(): Promise<void> {
       await productsClient.query(
         `
           DELETE FROM products
-          WHERE (attributes->>'source' IS DISTINCT FROM 'posiflora-warehouse')
+          WHERE (attributes->>'source' IS DISTINCT FROM 'posiflora-bouquets')
              OR (posiflora_id IS NOT NULL AND posiflora_id NOT IN (${idsArray
                .map((_, index) => `$${index + 1}`)
                .join(', ')}))

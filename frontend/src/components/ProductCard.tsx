@@ -3,6 +3,8 @@ import { Product } from '../types/catalog';
 import './ProductCard.css';
 import WebApp from '@twa-dev/sdk';
 import { resolveImageUrl } from '../utils/image';
+import { formatProductTitle } from '../utils/product-title';
+import { formatPrice } from '../utils/price';
 
 interface ProductCardProps {
   product: Product;
@@ -36,6 +38,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, onAd
       return () => clearTimeout(timer);
     }
   }, [isAddedAnim]);
+
+  const displayTitle = formatProductTitle(product.name);
 
   return (
     <div className="product-card fade-in" onClick={onClick}>
@@ -77,19 +81,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, onAd
       {/* Content */}
       <div className="product-card__content">
         <div className="product-card__info">
+          <h3 className="product-card__title">
+            {displayTitle || product.name}
+          </h3>
           <div className="product-card__price-row">
-             <span className="product-card__price">
-              {product.price.toLocaleString('ru-RU')} ₽
+            <span className="product-card__price">
+              {formatPrice(product.price)} ₽
             </span>
             {product.old_price && product.old_price > product.price && (
               <span className="product-card__old-price">
-                {product.old_price.toLocaleString('ru-RU')}
+                {formatPrice(product.old_price)}
               </span>
             )}
           </div>
-          <h3 className="product-card__title">
-            {product.name}
-          </h3>
         </div>
 
         <button

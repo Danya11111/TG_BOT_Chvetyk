@@ -5,11 +5,16 @@ import { useCartStore } from '../store/cart.store';
 import { useProductStore } from '../store/product.store';
 import { Button } from '../components/ui/Button';
 import { resolveImageUrl } from '../utils/image';
+import { formatProductTitle } from '../utils/product-title';
+import { formatPrice } from '../utils/price';
+import './Product.css';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
   const { addItem } = useCartStore();
   const { product, loading, error, fetchProduct, reset } = useProductStore();
 
@@ -33,6 +38,24 @@ export default function ProductPage() {
       WebApp.MainButton.hide();
     };
   }, []);
+
+  const attributes = product?.attributes as Record<string, unknown> | undefined;
+  const extraImages = attributes?.images;
+  const productImages = [
+    ...(product?.images || []),
+    ...(Array.isArray(extraImages) ? extraImages : []),
+    ...(typeof extraImages === 'string' ? [extraImages] : []),
+    ...(typeof attributes?.image === 'string' ? [attributes.image] : []),
+    ...(typeof attributes?.imageUrl === 'string' ? [attributes.imageUrl] : []),
+  ]
+    .map((image) => (typeof image === 'string' ? resolveImageUrl(image) : ''))
+    .filter((image) => Boolean(image));
+  const hasImages = productImages.length > 0;
+  const currentImage = hasImages ? productImages[activeImageIndex] : '';
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [product?.id]);
 
   const handleAddToCart = () => {
     if (!product || !product.in_stock) return;
@@ -95,16 +118,11 @@ export default function ProductPage() {
       paddingBottom: '20px'
     }} className="fade-in">
       
-      {/* Sticky Header with Back Button */}
+      {/* Header with Back Button */}
       <div style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
         padding: '12px 16px',
         display: 'flex',
-        alignItems: 'center',
-        background: 'var(--bg-glass)',
-        backdropFilter: 'blur(10px)'
+        alignItems: 'center'
       }}>
         <button 
           onClick={() => navigate(-1)}
@@ -126,22 +144,13 @@ export default function ProductPage() {
       </div>
 
       {/* Main Image */}
-      <div style={{ 
-        width: '100%',
-        aspectRatio: '1',
-        backgroundColor: 'var(--bg-surface)',
-        marginTop: '-64px', /* Pull up behind header */
-        zIndex: 1
-      }}>
-        {product.images && product.images.length > 0 ? (
+      <div className="product-hero">
+        {hasImages ? (
           <img
-            src={resolveImageUrl(product.images[0])}
+            src={currentImage}
             alt={product.name}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
+            className="product-hero__image"
+            onClick={() => setIsViewerOpen(true)}
           />
         ) : (
           <div style={{
@@ -157,12 +166,46 @@ export default function ProductPage() {
             🌺
           </div>
         )}
+        {hasImages && productImages.length > 1 && (
+          <>
+            <button
+              className="product-hero__nav product-hero__nav--prev"
+              onClick={() =>
+                setActiveImageIndex((prev) =>
+                  prev === 0 ? productImages.length - 1 : prev - 1
+                )
+              }
+              aria-label="Предыдущее фото"
+            >
+              ‹
+            </button>
+            <button
+              className="product-hero__nav product-hero__nav--next"
+              onClick={() =>
+                setActiveImageIndex((prev) =>
+                  prev === productImages.length - 1 ? 0 : prev + 1
+                )
+              }
+              aria-label="Следующее фото"
+            >
+              ›
+            </button>
+            <div className="product-hero__dots">
+              {productImages.map((_, index) => (
+                <span
+                  key={`dot-${index}`}
+                  className={`product-hero__dot ${index === activeImageIndex ? 'product-hero__dot--active' : ''}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Content Container */}
       <div style={{
         position: 'relative',
-        marginTop: '-20px',
+        marginTop: '16px',
         borderTopLeftRadius: '24px',
         borderTopRightRadius: '24px',
         backgroundColor: 'var(--bg-main)',
@@ -173,17 +216,19 @@ export default function ProductPage() {
         
         {/* Header Info */}
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-            <h1 className="text-h2" style={{ lineHeight: 1.2 }}>{product.name}</h1>
-            <div style={{ textAlign: 'right' }}>
-               <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-accent)' }}>
-                 {product.price.toLocaleString('ru-RU')} ₽
-               </div>
-               {product.old_price && product.old_price > product.price && (
-                 <div style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                   {product.old_price.toLocaleString('ru-RU')} ₽
-                 </div>
-               )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <h1 className="text-h2" style={{ lineHeight: 1.2 }}>
+              {formatProductTitle(product.name) || product.name}
+            </h1>
+            <div style={{ textAlign: 'right', width: '100%' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-accent)' }}>
+                {formatPrice(product.price)} ₽
+              </div>
+              {product.old_price && product.old_price > product.price && (
+                <div style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  {formatPrice(product.old_price)} ₽
+                </div>
+              )}
             </div>
           </div>
           {product.category_name && (
@@ -293,7 +338,7 @@ export default function ProductPage() {
               boxShadow: 'var(--shadow-md)',
             }}
           >
-            Добавить в корзину • {(product.price * quantity).toLocaleString('ru-RU')} ₽
+            Добавить в корзину • {formatPrice(product.price * quantity)} ₽
           </Button>
         )}
 
@@ -308,6 +353,43 @@ export default function ProductPage() {
            </div>
         )}
       </div>
+
+      {isViewerOpen && hasImages && (
+        <div className="image-modal" onClick={() => setIsViewerOpen(false)}>
+          <div className="image-modal__content" onClick={(event) => event.stopPropagation()}>
+            <img src={currentImage} alt={product.name} className="image-modal__image" />
+            <button className="image-modal__close" onClick={() => setIsViewerOpen(false)} aria-label="Закрыть">
+              ×
+            </button>
+            {productImages.length > 1 && (
+              <>
+                <button
+                  className="image-modal__nav image-modal__nav--prev"
+                  onClick={() =>
+                    setActiveImageIndex((prev) =>
+                      prev === 0 ? productImages.length - 1 : prev - 1
+                    )
+                  }
+                  aria-label="Предыдущее фото"
+                >
+                  ‹
+                </button>
+                <button
+                  className="image-modal__nav image-modal__nav--next"
+                  onClick={() =>
+                    setActiveImageIndex((prev) =>
+                      prev === productImages.length - 1 ? 0 : prev + 1
+                    )
+                  }
+                  aria-label="Следующее фото"
+                >
+                  ›
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
