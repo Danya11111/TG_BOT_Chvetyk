@@ -8,15 +8,7 @@ import {
   clearSupportSession,
   closeTicket,
   getOpenTicketByTelegramId,
-  getTicketByThreadId,
 } from '../support/support.service';
-
-function formatPersonName(person?: { first_name?: string; last_name?: string; username?: string }): string {
-  const name = [person?.first_name, person?.last_name].filter(Boolean).join(' ').trim();
-  if (name) return name;
-  if (person?.username) return `@${person.username}`;
-  return 'менеджер';
-}
 
 export async function handleCallback(ctx: Context): Promise<void> {
   // Логируем ВСЕ callback запросы в самом начале для диагностики
@@ -98,49 +90,6 @@ export async function handleCallback(ctx: Context): Promise<void> {
       logger.error('Failed to close support via callback', {
         error: error instanceof Error ? error.message : String(error),
         telegramId: user.id,
-      });
-      await ctx.answerCbQuery();
-    }
-    return;
-  }
-
-  const supportReplyPrefix = 'support_reply:';
-  if (callbackData.startsWith(supportReplyPrefix)) {
-    const parts = callbackData.split(':');
-    const threadId = Number(parts[1] || '');
-    const groupChatId = config.support.groupChatId;
-    const messageChatId = (ctx.callbackQuery as any)?.message?.chat?.id;
-    if (!groupChatId || messageChatId !== groupChatId || !Number.isFinite(threadId)) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    try {
-      const ticket = await getTicketByThreadId(groupChatId, threadId);
-      const clientNameRaw = ticket?.customerName || null;
-      const clientUsername = ticket?.telegramUsername ? `@${ticket.telegramUsername}` : null;
-      const clientName =
-        clientNameRaw?.trim()?.split(/\s+/)[0] ||
-        clientUsername ||
-        (ticket?.telegramId ? `id:${ticket.telegramId}` : 'клиент');
-
-      const managerName = formatPersonName(ctx.from as any);
-
-      const template =
-        `Здравствуйте, ${clientName}!\n` +
-        `Меня зовут ${managerName}, я менеджер Flowers Studio.\n\n` +
-        `Спасибо за обращение!\n` +
-        `Подскажите, пожалуйста, что именно нужно уточнить (если есть — номер заказа), и я сразу помогу.`;
-
-      // Telegram does not support "prefill text" for private topic links, but share links do:
-      // they open the chat picker and insert prepared text into the input field after selection.
-      const shareUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(template)}`;
-
-      await (ctx as any).answerCbQuery(undefined, { url: shareUrl });
-    } catch (error) {
-      logger.error('Failed to build support reply template', {
-        error: error instanceof Error ? error.message : String(error),
-        threadId,
       });
       await ctx.answerCbQuery();
     }

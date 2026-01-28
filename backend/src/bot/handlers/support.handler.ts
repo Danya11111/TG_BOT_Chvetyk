@@ -123,6 +123,13 @@ async function copyMessageSafe(
   return null;
 }
 
+function toTelegramInternalChatId(chatId: number): string | null {
+  const raw = String(chatId);
+  if (raw.startsWith('-100')) return raw.slice(4);
+  if (raw.startsWith('-')) return raw.slice(1);
+  return raw || null;
+}
+
 export async function handleSupportRouting(ctx: Context, next: () => Promise<void>): Promise<void> {
   const message: any = ctx.message as any;
   if (!message) {
@@ -273,7 +280,11 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
         const previewText = typeof message.text === 'string' ? message.text : '';
         const preview = previewText.trim() ? `\n\nСообщение:\n${previewText.slice(0, 500)}` : '';
 
-        const replyCallback = `support_reply:${ticket.threadId}`;
+        const internalId = toTelegramInternalChatId(ticket.groupChatId);
+        const url =
+          internalId && forwardedMessageId
+            ? `https://t.me/c/${internalId}/${ticket.threadId}/${forwardedMessageId}`
+            : null;
 
         await sendToSupportLog(
           ctx,
@@ -281,15 +292,13 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
             `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
             `Время: ${clientAtText}\n` +
             `Тема: ${topicName}${preview}`,
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: 'Перейти в чат с клиентом', callback_data: replyCallback },
-                ],
-              ],
-            },
-          }
+          url
+            ? {
+                reply_markup: {
+                  inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
+                },
+              }
+            : undefined
         );
       }
       return;
@@ -311,7 +320,11 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
       const previewText = typeof message.caption === 'string' ? message.caption : '';
       const preview = previewText.trim() ? `\n\nСообщение:\n${previewText.slice(0, 500)}` : '';
 
-      const replyCallback = `support_reply:${ticket.threadId}`;
+      const internalId = toTelegramInternalChatId(ticket.groupChatId);
+      const url =
+        internalId && forwardedMessageId
+          ? `https://t.me/c/${internalId}/${ticket.threadId}/${forwardedMessageId}`
+          : null;
 
       await sendToSupportLog(
         ctx,
@@ -319,15 +332,13 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
           `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
           `Время: ${clientAtText}\n` +
           `Тема: ${topicName}${preview}`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Перейти в чат с клиентом', callback_data: replyCallback },
-              ],
-            ],
-          },
-        }
+        url
+          ? {
+              reply_markup: {
+                inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
+              },
+            }
+          : undefined
       );
     }
     return;
