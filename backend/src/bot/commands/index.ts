@@ -3,7 +3,7 @@ import { handleStart } from './start';
 import { handleHelp } from './help';
 import { handleMenu } from './menu';
 import { logger } from '../../utils/logger';
-import { closeTicket, getOpenTicketByTelegramId, startSupport } from '../support/support.service';
+import { closeTicket, getOpenTicketByTelegramId, setSupportPending } from '../support/support.service';
 
 export function setupCommands(bot: Telegraf): void {
   bot.command('start', async (ctx) => {
@@ -39,11 +39,13 @@ export function setupCommands(bot: Telegraf): void {
 
   bot.command('support', async (ctx) => {
     try {
-      await startSupport(ctx);
+      if (ctx.from?.id) {
+        await setSupportPending(ctx.from.id);
+      }
       await ctx.reply(
-        'Напишите ваш вопрос в этот чат.\n' +
-          'Менеджер ответит здесь.\n\n' +
-          'Чтобы закрыть чат поддержки: /close'
+        'Напишите ваш запрос в этот чат.\n' +
+          'Первый свободный менеджер ответит здесь.\n\n' +
+          'Чтобы закрыть поддержку: /close'
       );
     } catch (error) {
       logger.error('Failed to start support', {

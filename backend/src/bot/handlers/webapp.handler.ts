@@ -1,9 +1,13 @@
 import { Context } from 'telegraf';
 import { logger } from '../../utils/logger';
-import { startSupport } from '../support/support.service';
+import { setSupportPending } from '../support/support.service';
 
 export async function handleWebAppData(ctx: Context): Promise<void> {
-  const webAppData = (ctx.message as any)?.web_app?.data;
+  const message: any = ctx.message as any;
+  const webAppData =
+    message?.web_app_data?.data ||
+    message?.web_app?.data ||
+    null;
 
   if (!webAppData) {
     return;
@@ -20,11 +24,13 @@ export async function handleWebAppData(ctx: Context): Promise<void> {
 
     if (parsed?.type === 'support' || parsed?.action === 'support') {
       try {
-        await startSupport(ctx);
+        if (ctx.from?.id) {
+          await setSupportPending(ctx.from.id);
+        }
         await ctx.reply(
-          'Напишите ваш вопрос в этот чат.\n' +
-            'Менеджер ответит здесь.\n\n' +
-            'Чтобы закрыть чат поддержки: /close'
+          'Напишите ваш запрос в этот чат.\n' +
+            'Первый свободный менеджер ответит здесь.\n\n' +
+            'Чтобы закрыть поддержку: /close'
         );
       } catch (error) {
         logger.error('Failed to start support from WebApp', {

@@ -40,7 +40,9 @@ export function setupHandlers(bot: Telegraf): void {
   // Обработка данных от WebApp (сигналы из Mini App)
   bot.on('message', async (ctx, next) => {
     const message = ctx.message as any;
-    if (message?.web_app) {
+    // Telegram sends Mini App payload via message.web_app_data
+    // (keep message.web_app as backward-compat just in case)
+    if (message?.web_app_data || message?.web_app) {
       await handleWebAppData(ctx);
       return;
     }

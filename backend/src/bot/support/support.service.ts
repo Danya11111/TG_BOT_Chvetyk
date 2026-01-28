@@ -27,6 +27,7 @@ export interface SupportTicket {
 }
 
 const SUPPORT_SESSION_TTL_SECONDS = 24 * 60 * 60; // 24h
+const SUPPORT_PENDING_TTL_SECONDS = 15 * 60; // 15m
 
 export function getSupportGroupChatId(): number | null {
   return config.support.groupChatId ?? null;
@@ -46,6 +47,26 @@ export async function clearSupportSession(telegramId: number): Promise<void> {
 
 export async function getSupportSession(telegramId: number): Promise<{ ticketId: number } | null> {
   return cache.get<{ ticketId: number }>(supportSessionKey(telegramId));
+}
+
+function supportPendingKey(telegramId: number): string {
+  return `support:pending:${telegramId}`;
+}
+
+export async function setSupportPending(telegramId: number): Promise<void> {
+  await cache.set(
+    supportPendingKey(telegramId),
+    { requestedAt: new Date().toISOString() },
+    SUPPORT_PENDING_TTL_SECONDS
+  );
+}
+
+export async function clearSupportPending(telegramId: number): Promise<void> {
+  await cache.delete(supportPendingKey(telegramId));
+}
+
+export async function getSupportPending(telegramId: number): Promise<{ requestedAt: string } | null> {
+  return cache.get<{ requestedAt: string }>(supportPendingKey(telegramId));
 }
 
 export async function getOpenTicketByTelegramId(telegramId: number): Promise<SupportTicket | null> {
@@ -233,7 +254,7 @@ async function createForumTopic(
 export async function sendToSupportLog(
   ctx: Context,
   text: string,
-  extra?: { disable_notification?: boolean }
+  extra?: { disable_notification?: boolean; reply_markup?: unknown }
 ): Promise<void> {
   const chatId = config.support.groupChatId;
   if (!chatId) {

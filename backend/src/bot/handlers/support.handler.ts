@@ -2,15 +2,18 @@ import type { Context } from 'telegraf';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import {
+  clearSupportPending,
   clearSupportSession,
   closeTicket,
   getOpenTicketByTelegramId,
   getSupportGroupChatId,
+  getSupportPending,
   getSupportSession,
   getTicketByThreadId,
   markTicketClientMessage,
   markTicketManagerResponse,
   sendToSupportLog,
+  startSupport,
 } from '../support/support.service';
 
 function formatManagerLabel(manager: { id: number; username?: string; first_name?: string }): string {
@@ -65,29 +68,38 @@ function parseDbDate(value: string | null): Date | null {
   return d;
 }
 
-async function sendMessageSafe(ctx: Context, chatId: number, text: string, extra?: any): Promise<void> {
+async function sendMessageSafe(ctx: Context, chatId: number, text: string, extra?: any): Promise<number | null> {
   try {
-    await (ctx.telegram as any).callApi('sendMessage', {
+    const sent = await (ctx.telegram as any).callApi('sendMessage', {
       chat_id: chatId,
       text,
       ...(extra || {}),
     });
+    return typeof sent?.message_id === 'number' ? sent.message_id : null;
   } catch (error) {
     logger.error('Failed to send message', {
       chatId,
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  return null;
 }
 
-async function copyMessageSafe(ctx: Context, toChatId: number, fromChatId: number, messageId: number, extra?: any): Promise<void> {
+async function copyMessageSafe(
+  ctx: Context,
+  toChatId: number,
+  fromChatId: number,
+  messageId: number,
+  extra?: any
+): Promise<number | null> {
   try {
-    await (ctx.telegram as any).callApi('copyMessage', {
+    const sent = await (ctx.telegram as any).callApi('copyMessage', {
       chat_id: toChatId,
       from_chat_id: fromChatId,
       message_id: messageId,
       ...(extra || {}),
     });
+    return typeof sent?.message_id === 'number' ? sent.message_id : null;
   } catch (error) {
     logger.error('Failed to copy message', {
       toChatId,
@@ -96,6 +108,14 @@ async function copyMessageSafe(ctx: Context, toChatId: number, fromChatId: numbe
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  return null;
+}
+
+function toTelegramInternalChatId(chatId: number): string | null {
+  const raw = String(chatId);
+  if (raw.startsWith('-100')) return raw.slice(4);
+  if (raw.startsWith('-')) return raw.slice(1);
+  return raw || null;
 }
 
 export async function handleSupportRouting(ctx: Context, next: () => Promise<void>): Promise<void> {
@@ -105,7 +125,7 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
   }
 
   // Let WebApp handler process first
-  if (message?.web_app) {
+  if (message?.web_app || message?.web_app_data) {
     return next();
   }
 
@@ -210,8 +230,28 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
     }
 
     const session = await getSupportSession(user.id);
-    if (!session) {
+    const pending = session ? null : await getSupportPending(user.id);
+    if (!session && !pending) {
       return next();
+    }
+
+    // Create / reuse topic only on the first real client message after entering support mode
+    if (!session && pending) {
+      try {
+        await startSupport(ctx);
+      } catch (error) {
+        logger.error('Failed to create support ticket on first message', {
+          error: error instanceof Error ? error.message : String(error),
+          fromId: user.id,
+        });
+        await ctx.reply(
+          'Не удалось создать чат поддержки.\n' +
+            'Проверьте, что группа поддержки — это супергруппа с включёнными темами (Topics) и бот добавлен админом.'
+        );
+        return;
+      } finally {
+        await clearSupportPending(user.id);
+      }
     }
 
     const ticket = await getOpenTicketByTelegramId(user.id);
@@ -224,31 +264,38 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
     const clientLabel = formatClientLabel(ticket);
     const clientAt = new Date((message.date ? Number(message.date) : Math.floor(Date.now() / 1000)) * 1000);
     const clientMeta = await markTicketClientMessage(ticket.id, clientAt);
-    if (clientMeta.isFirstClientMessage) {
-      const clientAtText = formatSupportDateTime(clientAt);
-      const topicName = ticket.topicName || `thread:${ticket.threadId}`;
-      const previewText =
-        typeof message.text === 'string'
-          ? message.text
-          : typeof message.caption === 'string'
-            ? message.caption
-            : '';
-      const preview = previewText.trim() ? `\n\nСообщение:\n${previewText.slice(0, 500)}` : '';
-
-      await sendToSupportLog(
-        ctx,
-        `🆘 Новый запрос в поддержку\n` +
-          `Клиент: ${clientLabel}\n` +
-          `Время: ${clientAtText}\n` +
-          `Тема: ${topicName}${preview}`
-      );
-    }
 
     // Text messages: send with prefix
     if (message.text) {
-      await sendMessageSafe(ctx, ticket.groupChatId, `👤 ${clientLabel}:\n${message.text}`, {
+      const forwardedMessageId = await sendMessageSafe(ctx, ticket.groupChatId, `👤 ${clientLabel}:\n${message.text}`, {
         message_thread_id: ticket.threadId,
       });
+
+      if (clientMeta.isFirstClientMessage) {
+        const clientAtText = formatSupportDateTime(clientAt);
+        const topicName = ticket.topicName || `thread:${ticket.threadId}`;
+        const previewText = typeof message.text === 'string' ? message.text : '';
+        const preview = previewText.trim() ? `\n\nСообщение:\n${previewText.slice(0, 500)}` : '';
+
+        const internalId = toTelegramInternalChatId(ticket.groupChatId);
+        const url =
+          internalId && forwardedMessageId ? `https://t.me/c/${internalId}/${forwardedMessageId}` : null;
+
+        await sendToSupportLog(
+          ctx,
+          `🆘 Новый запрос в поддержку\n` +
+            `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
+            `Время: ${clientAtText}\n` +
+            `Тема: ${topicName}${preview}`,
+          url
+            ? {
+                reply_markup: {
+                  inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
+                },
+              }
+            : undefined
+        );
+      }
       return;
     }
 
@@ -257,10 +304,36 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
     const captionPrefix = `👤 ${clientLabel}`;
     const caption = originalCaption ? `${captionPrefix}\n${originalCaption}` : captionPrefix;
 
-    await copyMessageSafe(ctx, ticket.groupChatId, user.id, message.message_id, {
+    const forwardedMessageId = await copyMessageSafe(ctx, ticket.groupChatId, user.id, message.message_id, {
       message_thread_id: ticket.threadId,
       caption,
     });
+
+    if (clientMeta.isFirstClientMessage) {
+      const clientAtText = formatSupportDateTime(clientAt);
+      const topicName = ticket.topicName || `thread:${ticket.threadId}`;
+      const previewText = typeof message.caption === 'string' ? message.caption : '';
+      const preview = previewText.trim() ? `\n\nСообщение:\n${previewText.slice(0, 500)}` : '';
+
+      const internalId = toTelegramInternalChatId(ticket.groupChatId);
+      const url =
+        internalId && forwardedMessageId ? `https://t.me/c/${internalId}/${forwardedMessageId}` : null;
+
+      await sendToSupportLog(
+        ctx,
+        `🆘 Новый запрос в поддержку\n` +
+          `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
+          `Время: ${clientAtText}\n` +
+          `Тема: ${topicName}${preview}`,
+        url
+          ? {
+              reply_markup: {
+                inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
+              },
+            }
+          : undefined
+      );
+    }
     return;
   }
 
