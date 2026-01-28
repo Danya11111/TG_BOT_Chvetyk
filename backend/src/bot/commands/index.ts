@@ -42,11 +42,7 @@ export function setupCommands(bot: Telegraf): void {
       if (ctx.from?.id) {
         await setSupportPending(ctx.from.id);
       }
-      await ctx.reply('Напишите ваш запрос в этот чат.\nПервый свободный менеджер ответит вам здесь.', {
-        reply_markup: {
-          inline_keyboard: [[{ text: '✅ Завершить диалог', callback_data: 'support_close' }]],
-        },
-      } as any);
+      await ctx.reply('Напишите ваш запрос в этот чат.\nПервый свободный менеджер ответит вам здесь.');
     } catch (error) {
       logger.error('Failed to start support', {
         error: error instanceof Error ? error.message : String(error),
@@ -70,12 +66,10 @@ export function setupCommands(bot: Telegraf): void {
 
     const ticket = await getOpenTicketByTelegramId(user.id);
     if (!ticket) {
-      await ctx.reply('Нет активного чата поддержки.');
       return;
     }
 
     await closeTicket(ctx, ticket, undefined);
-    await ctx.reply('✅ Чат поддержки закрыт.');
   });
 
   logger.info('Commands /start, /help, /menu, /chatid, /support, /close registered');

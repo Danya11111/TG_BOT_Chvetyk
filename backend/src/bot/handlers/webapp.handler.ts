@@ -27,11 +27,7 @@ export async function handleWebAppData(ctx: Context): Promise<void> {
         if (ctx.from?.id) {
           await setSupportPending(ctx.from.id);
         }
-        await ctx.reply('Напишите ваш запрос в этот чат.\nПервый свободный менеджер ответит вам здесь.', {
-          reply_markup: {
-            inline_keyboard: [[{ text: '✅ Завершить диалог', callback_data: 'support_close' }]],
-          },
-        } as any);
+        await ctx.reply('Напишите ваш запрос в этот чат.\nПервый свободный менеджер ответит вам здесь.');
       } catch (error) {
         logger.error('Failed to start support from WebApp', {
           error: error instanceof Error ? error.message : String(error),

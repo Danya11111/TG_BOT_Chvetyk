@@ -92,33 +92,26 @@ export async function handleCallback(ctx: Context): Promise<void> {
       } catch {
         // ignore
       }
-      try {
-        await (ctx as any).editMessageText('✅ Чат поддержки закрыт.', { reply_markup: { inline_keyboard: [] } });
-      } catch {
-        // ignore
-      }
-
-      await ctx.answerCbQuery('Чат закрыт');
+      // Do not notify client: close silently
+      await ctx.answerCbQuery();
     } catch (error) {
       logger.error('Failed to close support via callback', {
         error: error instanceof Error ? error.message : String(error),
         telegramId: user.id,
       });
-      await ctx.answerCbQuery('Не удалось закрыть чат');
+      await ctx.answerCbQuery();
     }
     return;
   }
 
-  const supportTemplatePrefix = 'support_template:';
-  if (callbackData.startsWith(supportTemplatePrefix)) {
+  const supportReplyPrefix = 'support_reply:';
+  if (callbackData.startsWith(supportReplyPrefix)) {
     const parts = callbackData.split(':');
     const threadId = Number(parts[1] || '');
-    const replyToMessageId = Number(parts[2] || '');
-    const ticketTelegramId = Number(parts[3] || '');
-
     const groupChatId = config.support.groupChatId;
-    if (!groupChatId || !Number.isFinite(threadId)) {
-      await ctx.answerCbQuery('Не удалось сформировать шаблон');
+    const messageChatId = (ctx.callbackQuery as any)?.message?.chat?.id;
+    if (!groupChatId || messageChatId !== groupChatId || !Number.isFinite(threadId)) {
+      await ctx.answerCbQuery();
       return;
     }
 
@@ -126,30 +119,30 @@ export async function handleCallback(ctx: Context): Promise<void> {
       const ticket = await getTicketByThreadId(groupChatId, threadId);
       const clientNameRaw = ticket?.customerName || null;
       const clientUsername = ticket?.telegramUsername ? `@${ticket.telegramUsername}` : null;
-      const clientName = clientNameRaw?.trim() || clientUsername || (ticketTelegramId ? `id:${ticketTelegramId}` : 'клиент');
+      const clientName =
+        clientNameRaw?.trim()?.split(/\s+/)[0] ||
+        clientUsername ||
+        (ticket?.telegramId ? `id:${ticket.telegramId}` : 'клиент');
 
       const managerName = formatPersonName(ctx.from as any);
 
       const template =
-        `Шаблон ответа (скопируйте, отредактируйте и отправьте клиенту):\n\n` +
         `Здравствуйте, ${clientName}!\n` +
-        `Меня зовут ${managerName}, я менеджер Flowers Studio.\n` +
-        `Спасибо за обращение! Подскажите, пожалуйста, что именно нужно уточнить (или номер заказа) — и я сразу помогу.`;
+        `Меня зовут ${managerName}, я менеджер Flowers Studio.\n\n` +
+        `Спасибо за обращение!\n` +
+        `Подскажите, пожалуйста, что именно нужно уточнить (если есть — номер заказа), и я сразу помогу.`;
 
-      await (ctx.telegram as any).callApi('sendMessage', {
-        chat_id: groupChatId,
-        message_thread_id: threadId,
-        ...(Number.isFinite(replyToMessageId) && replyToMessageId > 0 ? { reply_to_message_id: replyToMessageId } : {}),
-        text: template,
-      });
+      // Telegram does not support "prefill text" for private topic links, but share links do:
+      // they open the chat picker and insert prepared text into the input field after selection.
+      const shareUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(template)}`;
 
-      await ctx.answerCbQuery('Шаблон добавлен в тему');
+      await (ctx as any).answerCbQuery(undefined, { url: shareUrl });
     } catch (error) {
-      logger.error('Failed to send support template', {
+      logger.error('Failed to build support reply template', {
         error: error instanceof Error ? error.message : String(error),
         threadId,
       });
-      await ctx.answerCbQuery('Не удалось сформировать шаблон');
+      await ctx.answerCbQuery();
     }
     return;
   }

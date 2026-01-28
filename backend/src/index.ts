@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { testConnection } from './database/connection';
 import { runMigrations } from './database/migrate';
 import { startBot } from './bot/bot';
+import { startSupportAutoCloseScheduler } from './bot/support/support.autoclose';
 import { startPosifloraScheduler } from './integrations/posiflora/scheduler';
 
 async function startServer(): Promise<void> {
@@ -70,6 +71,7 @@ async function startServer(): Promise<void> {
     logger.info('Starting Telegram Bot...');
     try {
       await startBot();
+      startSupportAutoCloseScheduler();
       
       // Периодическая проверка webhook (каждую минуту для более быстрого восстановления)
       setInterval(async () => {
