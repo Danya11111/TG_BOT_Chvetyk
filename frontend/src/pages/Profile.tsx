@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { getOrderStatus, getOrders, OrdersListItem, OrderStatusResponse } from '../api/orders.api';
+import { requestSupport } from '../api/support.api';
 import { ProfileAddress, useProfileStore } from '../store/profile.store';
 import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -27,6 +28,7 @@ export default function ProfilePage() {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [orderDetails, setOrderDetails] = useState<Record<number, OrderStatusResponse>>({});
   const [orderDetailsLoading, setOrderDetailsLoading] = useState<Record<number, boolean>>({});
+  const [supportRequestLoading, setSupportRequestLoading] = useState(false);
   
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
@@ -908,13 +910,24 @@ export default function ProfilePage() {
               Если у вас возникли вопросы или проблемы, свяжитесь с нами через бота.
             </p>
             <button
-              onClick={() => {
-                try {
-                  WebApp.sendData(JSON.stringify({ type: 'support' }));
-                } catch (e) {
-                  // ignore
+              onClick={async () => {
+                if (supportRequestLoading) {
+                  return;
                 }
-                WebApp.close();
+                try {
+                  setSupportRequestLoading(true);
+                  await requestSupport();
+                  WebApp.close();
+                } catch (e) {
+                  console.error('Failed to request support:', e);
+                  try {
+                    WebApp.showAlert('Не удалось открыть поддержку. Попробуйте ещё раз.');
+                  } catch {
+                    // ignore
+                  }
+                } finally {
+                  setSupportRequestLoading(false);
+                }
               }}
               style={{
                 width: '100%',
@@ -925,10 +938,12 @@ export default function ProfilePage() {
                 color: 'var(--text-on-accent)',
                 fontSize: '14px',
                 fontWeight: '500',
-                cursor: 'pointer'
+                cursor: supportRequestLoading ? 'not-allowed' : 'pointer',
+                opacity: supportRequestLoading ? 0.7 : 1
               }}
+              disabled={supportRequestLoading}
             >
-              Написать в поддержку
+              {supportRequestLoading ? 'Открываем поддержку…' : 'Написать в поддержку'}
             </button>
           </div>
         )}
