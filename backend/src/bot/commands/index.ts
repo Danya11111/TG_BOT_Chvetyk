@@ -42,11 +42,11 @@ export function setupCommands(bot: Telegraf): void {
       if (ctx.from?.id) {
         await setSupportPending(ctx.from.id);
       }
-      await ctx.reply(
-        'Напишите ваш запрос в этот чат.\n' +
-          'Первый свободный менеджер ответит здесь.\n\n' +
-          'Чтобы закрыть поддержку: /close'
-      );
+      await ctx.reply('Напишите ваш запрос в этот чат.\nПервый свободный менеджер ответит вам здесь.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '✅ Завершить диалог', callback_data: 'support_close' }]],
+        },
+      } as any);
     } catch (error) {
       logger.error('Failed to start support', {
         error: error instanceof Error ? error.message : String(error),

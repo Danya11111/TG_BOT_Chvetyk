@@ -3,6 +3,20 @@ import { db } from '../../database/connection';
 import { config } from '../../config';
 import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { logger } from '../../utils/logger';
+import {
+  clearSupportPending,
+  clearSupportSession,
+  closeTicket,
+  getOpenTicketByTelegramId,
+  getTicketByThreadId,
+} from '../support/support.service';
+
+function formatPersonName(person?: { first_name?: string; last_name?: string; username?: string }): string {
+  const name = [person?.first_name, person?.last_name].filter(Boolean).join(' ').trim();
+  if (name) return name;
+  if (person?.username) return `@${person.username}`;
+  return 'менеджер';
+}
 
 export async function handleCallback(ctx: Context): Promise<void> {
   // Логируем ВСЕ callback запросы в самом начале для диагностики
@@ -55,6 +69,90 @@ export async function handleCallback(ctx: Context): Promise<void> {
     chatId: (ctx.callbackQuery as any)?.message?.chat?.id,
     hasPhoto: !!(ctx.callbackQuery as any)?.message?.photo
   });
+
+  // --- Support callbacks ---
+  if (callbackData === 'support_close') {
+    const user = ctx.from;
+    if (!user) {
+      await ctx.answerCbQuery('Неизвестная команда');
+      return;
+    }
+
+    try {
+      await clearSupportPending(user.id);
+      const ticket = await getOpenTicketByTelegramId(user.id);
+      if (ticket) {
+        await closeTicket(ctx, ticket, undefined);
+      } else {
+        await clearSupportSession(user.id);
+      }
+
+      try {
+        await (ctx as any).editMessageReplyMarkup({ inline_keyboard: [] });
+      } catch {
+        // ignore
+      }
+      try {
+        await (ctx as any).editMessageText('✅ Чат поддержки закрыт.', { reply_markup: { inline_keyboard: [] } });
+      } catch {
+        // ignore
+      }
+
+      await ctx.answerCbQuery('Чат закрыт');
+    } catch (error) {
+      logger.error('Failed to close support via callback', {
+        error: error instanceof Error ? error.message : String(error),
+        telegramId: user.id,
+      });
+      await ctx.answerCbQuery('Не удалось закрыть чат');
+    }
+    return;
+  }
+
+  const supportTemplatePrefix = 'support_template:';
+  if (callbackData.startsWith(supportTemplatePrefix)) {
+    const parts = callbackData.split(':');
+    const threadId = Number(parts[1] || '');
+    const replyToMessageId = Number(parts[2] || '');
+    const ticketTelegramId = Number(parts[3] || '');
+
+    const groupChatId = config.support.groupChatId;
+    if (!groupChatId || !Number.isFinite(threadId)) {
+      await ctx.answerCbQuery('Не удалось сформировать шаблон');
+      return;
+    }
+
+    try {
+      const ticket = await getTicketByThreadId(groupChatId, threadId);
+      const clientNameRaw = ticket?.customerName || null;
+      const clientUsername = ticket?.telegramUsername ? `@${ticket.telegramUsername}` : null;
+      const clientName = clientNameRaw?.trim() || clientUsername || (ticketTelegramId ? `id:${ticketTelegramId}` : 'клиент');
+
+      const managerName = formatPersonName(ctx.from as any);
+
+      const template =
+        `Шаблон ответа (скопируйте, отредактируйте и отправьте клиенту):\n\n` +
+        `Здравствуйте, ${clientName}!\n` +
+        `Меня зовут ${managerName}, я менеджер Flowers Studio.\n` +
+        `Спасибо за обращение! Подскажите, пожалуйста, что именно нужно уточнить (или номер заказа) — и я сразу помогу.`;
+
+      await (ctx.telegram as any).callApi('sendMessage', {
+        chat_id: groupChatId,
+        message_thread_id: threadId,
+        ...(Number.isFinite(replyToMessageId) && replyToMessageId > 0 ? { reply_to_message_id: replyToMessageId } : {}),
+        text: template,
+      });
+
+      await ctx.answerCbQuery('Шаблон добавлен в тему');
+    } catch (error) {
+      logger.error('Failed to send support template', {
+        error: error instanceof Error ? error.message : String(error),
+        threadId,
+      });
+      await ctx.answerCbQuery('Не удалось сформировать шаблон');
+    }
+    return;
+  }
 
   const confirmPrefix = 'payment_confirm:';
   const rejectPrefix = 'payment_reject:';

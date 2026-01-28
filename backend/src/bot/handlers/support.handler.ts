@@ -23,10 +23,15 @@ function formatManagerLabel(manager: { id: number; username?: string; first_name
 }
 
 function formatClientLabel(client: { telegramId: number; telegramUsername: string | null; customerName: string | null }): string {
-  if (client.telegramUsername) return `@${client.telegramUsername}`;
-  if (client.customerName) return client.customerName;
+  const name = (client.customerName || '').trim() || null;
+  const username = client.telegramUsername ? `@${client.telegramUsername}` : null;
+  if (name && username) return `${name} (${username})`;
+  if (name) return name;
+  if (username) return username;
   return `id:${client.telegramId}`;
 }
+
+const CLIENT_MANAGER_LABEL = 'Менеджер FlowersStudioBot';
 
 function isCommandText(text: string | undefined): boolean {
   if (!text) return false;
@@ -207,10 +212,10 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
 
     // Relay to client
     if (message.text) {
-      await sendMessageSafe(ctx, ticket.telegramId, `👩‍💼 ${managerLabel}:\n${message.text}`);
+      await sendMessageSafe(ctx, ticket.telegramId, `${CLIENT_MANAGER_LABEL}:\n${message.text}`);
     } else {
       // For media/other messages: send manager label, then copy message as bot (no forwards)
-      await sendMessageSafe(ctx, ticket.telegramId, `👩‍💼 ${managerLabel}:`);
+      await sendMessageSafe(ctx, ticket.telegramId, `${CLIENT_MANAGER_LABEL}:`);
       await copyMessageSafe(ctx, ticket.telegramId, supportGroupChatId, message.message_id);
     }
 
@@ -267,7 +272,7 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
 
     // Text messages: send with prefix
     if (message.text) {
-      const forwardedMessageId = await sendMessageSafe(ctx, ticket.groupChatId, `👤 ${clientLabel}:\n${message.text}`, {
+      const forwardedMessageId = await sendMessageSafe(ctx, ticket.groupChatId, `${clientLabel}:\n${message.text}`, {
         message_thread_id: ticket.threadId,
       });
 
@@ -280,6 +285,7 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
         const internalId = toTelegramInternalChatId(ticket.groupChatId);
         const url =
           internalId && forwardedMessageId ? `https://t.me/c/${internalId}/${forwardedMessageId}` : null;
+        const templateCallback = `support_template:${ticket.threadId}:${forwardedMessageId || 0}:${ticket.telegramId}`;
 
         await sendToSupportLog(
           ctx,
@@ -287,13 +293,16 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
             `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
             `Время: ${clientAtText}\n` +
             `Тема: ${topicName}${preview}`,
-          url
-            ? {
-                reply_markup: {
-                  inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
-                },
-              }
-            : undefined
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  ...(url ? [{ text: 'Перейти в чат с клиентом', url }] : []),
+                  { text: 'Шаблон приветствия', callback_data: templateCallback },
+                ],
+              ],
+            },
+          }
         );
       }
       return;
@@ -301,7 +310,7 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
 
     // Media/other: copy into topic, with a caption prefix where supported
     const originalCaption: string | undefined = message.caption;
-    const captionPrefix = `👤 ${clientLabel}`;
+    const captionPrefix = `${clientLabel}`;
     const caption = originalCaption ? `${captionPrefix}\n${originalCaption}` : captionPrefix;
 
     const forwardedMessageId = await copyMessageSafe(ctx, ticket.groupChatId, user.id, message.message_id, {
@@ -318,6 +327,7 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
       const internalId = toTelegramInternalChatId(ticket.groupChatId);
       const url =
         internalId && forwardedMessageId ? `https://t.me/c/${internalId}/${forwardedMessageId}` : null;
+      const templateCallback = `support_template:${ticket.threadId}:${forwardedMessageId || 0}:${ticket.telegramId}`;
 
       await sendToSupportLog(
         ctx,
@@ -325,13 +335,16 @@ export async function handleSupportRouting(ctx: Context, next: () => Promise<voi
           `Клиент: ${clientLabel} (id: ${ticket.telegramId})\n` +
           `Время: ${clientAtText}\n` +
           `Тема: ${topicName}${preview}`,
-        url
-          ? {
-              reply_markup: {
-                inline_keyboard: [[{ text: 'Перейти в чат с клиентом', url }]],
-              },
-            }
-          : undefined
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                ...(url ? [{ text: 'Перейти в чат с клиентом', url }] : []),
+                { text: 'Шаблон приветствия', callback_data: templateCallback },
+              ],
+            ],
+          },
+        }
       );
     }
     return;

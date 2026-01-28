@@ -37,11 +37,14 @@ class SupportController {
 
     const message =
       'Напишите ваш запрос в этот чат.\n' +
-      'Первый свободный менеджер ответит вам здесь.\n\n' +
-      'Чтобы закрыть поддержку: /close';
+      'Первый свободный менеджер ответит вам здесь.';
 
     try {
-      await bot.telegram.sendMessage(telegramUser.id, message);
+      await bot.telegram.sendMessage(telegramUser.id, message, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '✅ Завершить диалог', callback_data: 'support_close' }]],
+        },
+      } as any);
     } catch (error) {
       logger.error('Support request: failed to send prompt to user', {
         error: error instanceof Error ? error.message : String(error),

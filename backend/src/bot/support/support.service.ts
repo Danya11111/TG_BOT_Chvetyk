@@ -311,6 +311,7 @@ export async function startSupport(ctx: Context): Promise<SupportTicket> {
     );
   }
 
+  const customerName = [user.first_name, (user as any).last_name].filter(Boolean).join(' ').trim() || null;
   const userLabel = formatUserLabel({
     id: user.id,
     username: user.username,
@@ -391,7 +392,7 @@ export async function startSupport(ctx: Context): Promise<SupportTicket> {
         updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, 'open', NOW(), NOW())
       RETURNING id`,
-    [user.id, user.username || null, user.first_name || null, topicName, groupChatId, threadId]
+    [user.id, user.username || null, customerName, topicName, groupChatId, threadId]
   );
 
   const ticketId = Number(insert.rows[0].id);
@@ -401,7 +402,7 @@ export async function startSupport(ctx: Context): Promise<SupportTicket> {
     id: ticketId,
     telegramId: user.id,
     telegramUsername: user.username || null,
-    customerName: user.first_name || null,
+    customerName,
     topicName,
     groupChatId,
     threadId,
