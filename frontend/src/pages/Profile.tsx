@@ -909,7 +909,12 @@ export default function ProfilePage() {
             </p>
             <button
               onClick={() => {
-                WebApp.openTelegramLink('https://t.me/FlowersStudioBot');
+                try {
+                  WebApp.sendData(JSON.stringify({ type: 'support' }));
+                } catch (e) {
+                  // ignore
+                }
+                WebApp.close();
               }}
               style={{
                 width: '100%',

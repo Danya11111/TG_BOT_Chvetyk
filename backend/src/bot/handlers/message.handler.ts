@@ -1,5 +1,4 @@
 import { Context } from 'telegraf';
-import { config } from '../../config';
 import { customerData } from '../../config/customer-data';
 import { handleMenu } from '../commands/menu';
 import { db } from '../../database/connection';
@@ -36,9 +35,11 @@ export async function handleMessage(ctx: Context): Promise<void> {
     case 'Старт':
     case 'старт':
       // Обрабатываем как команду /start
-      const { handleStart } = await import('../commands/start');
-      await handleStart(ctx);
-      return;
+      {
+        const { handleStart } = await import('../commands/start');
+        await handleStart(ctx);
+        return;
+      }
 
     case '📦 Мои заказы':
       await ctx.reply('Функция "Мои заказы" будет доступна после интеграции с Posiflora.');

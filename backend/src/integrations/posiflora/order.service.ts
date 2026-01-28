@@ -6,6 +6,7 @@ import { PosifloraOrderResponse } from './types';
 
 interface PosifloraOrderItem {
   posifloraId: string;
+  posifloraType: 'inventory-items' | 'bouquets';
   name: string;
   price: number;
   quantity: number;
@@ -87,7 +88,7 @@ interface PosifloraOrderRequest {
             totalAmountWithDiscount: string;
           };
           relationships: {
-            bouquet: { data: null };
+            bouquet: { data: null | { type: 'bouquets'; id: string } };
             item: { data: { type: 'inventory-items'; id: string } };
           };
         }>;
@@ -129,14 +130,7 @@ class PosifloraOrderService {
     }
   }
 
-  async createOrder(payload: PosifloraOrderPayload): Promise<string | null> {
-    this.ensureEnabled();
-
-    if (!payload.items.length) {
-      throw new Error('Posiflora order requires at least one item');
-    }
-
-    const customer = await posifloraClientService.syncCustomer(payload.customer);
+  private buildOrderPayload(payload: PosifloraOrderPayload, customerId: string | null): PosifloraOrderRequest {
     const dueTime = buildDateTime(payload.delivery.date, payload.delivery.time);
     const deliveryTimeWindow = config.posiflora.deliveryTimeWindowMinutes;
     const deliveryTimeTo = addMinutes(dueTime, deliveryTimeWindow);
@@ -147,26 +141,36 @@ class PosifloraOrderService {
     ].filter(Boolean);
 
     const normalizedRecipientPhone = normalizePhone(payload.recipient.phone);
-    const lines: PosifloraOrderRequest['data']['relationships']['lines']['data'] =
-      payload.items.map((item) => {
+
+    const lines: PosifloraOrderRequest['data']['relationships']['lines']['data'] = payload.items.map((item) => {
       const amount = item.price * item.quantity;
+      const isBouquet = item.posifloraType === 'bouquets';
+      const inventoryItemId = isBouquet ? config.posiflora.showcaseBouquetItemId : item.posifloraId;
+
       return {
         type: 'order-lines' as const,
         attributes: {
           amount: formatAmount(amount),
           discountPrice: formatAmount(item.price),
-          manualSetting: false,
+          manualSetting: isBouquet,
           price: formatAmount(item.price),
           qty: formatAmount(item.quantity),
           totalAmount: formatAmount(amount),
           totalAmountWithDiscount: formatAmount(amount),
         },
         relationships: {
-          bouquet: { data: null },
+          bouquet: isBouquet
+            ? {
+                data: {
+                  type: 'bouquets' as const,
+                  id: item.posifloraId,
+                },
+              }
+            : { data: null },
           item: {
             data: {
               type: 'inventory-items' as const,
-              id: item.posifloraId,
+              id: inventoryItemId,
             },
           },
         },
@@ -213,11 +217,11 @@ class PosifloraOrderService {
               id: config.posiflora.orderSourceId,
             },
           },
-          customer: customer
+          customer: customerId
             ? {
                 data: {
                   type: 'customers',
-                  id: customer.id,
+                  id: customerId,
                 },
               }
             : null,
@@ -240,6 +244,76 @@ class PosifloraOrderService {
         },
       };
     }
+
+    return orderPayload;
+  }
+
+  private async preflightOrderDependencies(payload: PosifloraOrderPayload): Promise<void> {
+    // Validate configured store/source ids exist (no side effects)
+    await posifloraApiClient.request<any>({ method: 'GET', url: `/stores/${config.posiflora.storeId}` });
+    await posifloraApiClient.request<any>({ method: 'GET', url: `/order-sources/${config.posiflora.orderSourceId}` });
+
+    const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
+    if (hasBouquets && config.posiflora.showcaseBouquetItemId) {
+      await posifloraApiClient.request<any>({
+        method: 'GET',
+        url: `/inventory-items/${config.posiflora.showcaseBouquetItemId}`,
+      });
+    }
+
+    // Validate each referenced id exists
+    for (const item of payload.items) {
+      if (item.posifloraType === 'bouquets') {
+        const bouquet = await posifloraApiClient.request<any>({ method: 'GET', url: `/bouquets/${item.posifloraId}` });
+        const status = bouquet?.data?.attributes?.status;
+        if (status && status !== 'demonstrated') {
+          logger.warn('Posiflora dry-run: bouquet is not demonstrated', {
+            bouquetId: item.posifloraId,
+            status,
+          });
+        }
+      } else {
+        await posifloraApiClient.request<any>({ method: 'GET', url: `/inventory-items/${item.posifloraId}` });
+      }
+    }
+  }
+
+  /**
+   * Dry-run: verify that referenced ids exist in Posiflora (GET only),
+   * build request body, but DO NOT create any orders/customers in Posiflora.
+   */
+  async dryRunOrder(payload: PosifloraOrderPayload): Promise<PosifloraOrderRequest> {
+    this.ensureEnabled();
+
+    if (!payload.items.length) {
+      throw new Error('Posiflora order requires at least one item');
+    }
+
+    const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
+    if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
+      throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
+    }
+
+    await this.preflightOrderDependencies(payload);
+
+    // Do not sync customer in dry-run (no side effects)
+    return this.buildOrderPayload(payload, null);
+  }
+
+  async createOrder(payload: PosifloraOrderPayload): Promise<string | null> {
+    this.ensureEnabled();
+
+    if (!payload.items.length) {
+      throw new Error('Posiflora order requires at least one item');
+    }
+
+    const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
+    if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
+      throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
+    }
+
+    const customer = await posifloraClientService.syncCustomer(payload.customer);
+    const orderPayload = this.buildOrderPayload(payload, customer?.id || null);
 
     const response = await posifloraApiClient.request<PosifloraOrderResponse>({
       method: 'POST',

@@ -23,7 +23,7 @@ export default function ProductPage() {
       if (!id) return;
       try {
         await fetchProduct(parseInt(id, 10));
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error loading product:', err);
       }
     };
@@ -40,6 +40,10 @@ export default function ProductPage() {
   }, []);
 
   const attributes = product?.attributes as Record<string, unknown> | undefined;
+  const composition =
+    typeof (attributes as { composition?: unknown } | undefined)?.composition === 'string'
+      ? (attributes as { composition: string }).composition
+      : null;
   const extraImages = attributes?.images;
   const productImages = [
     ...(product?.images || []),
@@ -312,7 +316,7 @@ export default function ProductPage() {
         )}
 
         {/* Composition */}
-        {product.attributes && (product.attributes as any).composition && (
+        {composition && (
           <div style={{ marginBottom: '24px' }}>
             <h3 className="text-h3" style={{ marginBottom: '12px' }}>Состав</h3>
             <p className="text-body" style={{ 
@@ -320,7 +324,7 @@ export default function ProductPage() {
               lineHeight: 1.6,
               whiteSpace: 'pre-wrap'
             }}>
-              {String((product.attributes as any).composition)}
+              {composition}
             </p>
           </div>
         )}

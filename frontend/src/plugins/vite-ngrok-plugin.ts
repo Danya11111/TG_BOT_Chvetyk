@@ -1,49 +1,36 @@
-// @ts-nocheck
 import type { Plugin } from 'vite';
-import type { Connect } from 'vite';
+
+type ViteDevServerWithCheckOrigin = {
+  // Vite internal method, may be missing from typings depending on version
+  checkOrigin?: (origin: string, host: string) => boolean;
+  httpServer?: {
+    on: (event: 'request', listener: (req: unknown, res: unknown) => void) => void;
+  } | null;
+};
+
+type RequestWithSkipHostCheck = {
+  __vite_skip_host_check?: boolean;
+};
 
 /**
- * Плагин для отключения проверки хоста в Vite для работы с ngrok
- * В Vite 7+ проверка хоста происходит через внутреннюю логику сервера
+ * Dev helper: disable Vite host/origin checks for ngrok tunnels.
  */
 export function viteNgrokPlugin(): Plugin {
   return {
     name: 'vite-ngrok-plugin',
-    configureServer(server) {
-      // В Vite 7+ проверка хоста происходит через метод checkOrigin
-      // Переопределяем его для пропуска всех хостов
-      
-      // Сохраняем оригинальный метод, если есть
-      const originalCheckOrigin = (server as any).checkOrigin;
-      
-      // Переопределяем checkOrigin для пропуска всех хостов
-      (server as any).checkOrigin = (origin: string, host: string) => {
-        // Пропускаем все хосты, включая ngrok
-        console.log(`[vite-ngrok-plugin] Allowing host: ${host || origin}`);
-        return true;
-      };
-      
-      // Также переопределяем через httpServer, если доступен
-      const httpServer = (server as any).httpServer;
-      if (httpServer) {
-        // Перехватываем запросы до проверки хоста
-        const originalListeners = httpServer.listeners('request') || [];
-        
-        // Добавляем обработчик для пропуска проверки
-        httpServer.on('request', (req: any, res: any, next?: any) => {
-          // Устанавливаем флаг для пропуска проверки
-          if (req.headers && req.headers.host) {
-            // Разрешаем все хосты
-            (req as any).__vite_skip_host_check = true;
-          }
-          if (next) next();
-        });
+    configureServer(server: unknown) {
+      const serverWithCheck = server as ViteDevServerWithCheckOrigin;
+
+      // Disable strict origin/host validation (ngrok changes host dynamically)
+      serverWithCheck.checkOrigin = () => true;
+
+      const httpServer = serverWithCheck.httpServer;
+      if (!httpServer) {
+        return;
       }
-      
-      // Добавляем middleware для пропуска всех запросов
-      server.middlewares.use((req: Connect.IncomingMessage, res: Connect.ServerResponse, next: Connect.NextFunction) => {
-        // Пропускаем все запросы
-        next();
+
+      httpServer.on('request', (req: unknown) => {
+        (req as RequestWithSkipHostCheck).__vite_skip_host_check = true;
       });
     },
   };

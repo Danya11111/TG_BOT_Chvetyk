@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import WebApp from '@twa-dev/sdk';
 import { getTelegramInitData } from '../utils/initData';
 import { useCartStore } from '../store/cart.store';
@@ -10,10 +11,32 @@ import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
 
+type ApiErrorShape = {
+  error?: {
+    message?: unknown;
+  };
+};
+
+const extractApiErrorMessage = (error: unknown): string | null => {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as unknown;
+    if (data && typeof data === 'object') {
+      const message = (data as ApiErrorShape)?.error?.message;
+      if (typeof message === 'string' && message.trim()) {
+        return message;
+      }
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return null;
+};
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { items, getTotal, clearCart } = useCartStore();
-  const { formData: savedFormData, saveFormData, clearFormData } = useCheckoutStore();
+  const { formData: savedFormData, saveFormData } = useCheckoutStore();
   const { addresses: savedAddresses } = useProfileStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -187,11 +210,9 @@ export default function CheckoutPage() {
       setPaymentStep('payment');
     } catch (error) {
       console.error('Error creating order:', error);
-      const errorMessage =
-        (error as any)?.response?.data?.error?.message ||
-        (error as Error)?.message ||
-        'Произошла ошибка при оформлении заказа. Попробуйте позже.';
-      showAlert(errorMessage);
+      showAlert(
+        extractApiErrorMessage(error) || 'Произошла ошибка при оформлении заказа. Попробуйте позже.'
+      );
     } finally {
       setLoading(false);
     }
@@ -200,7 +221,6 @@ export default function CheckoutPage() {
     validateForm,
     orderId,
     clearCart,
-    clearFormData,
     items,
     showAlert,
   ]);
@@ -269,10 +289,7 @@ export default function CheckoutPage() {
       showAlert('Чек отправлен. Спасибо!');
     } catch (error) {
       console.error('Failed to upload receipt:', error);
-      const errorMessage =
-        (error as any)?.response?.data?.error?.message ||
-        (error as Error)?.message ||
-        'Не удалось отправить чек. Попробуйте позже.';
+      const errorMessage = extractApiErrorMessage(error) || 'Не удалось отправить чек. Попробуйте позже.';
       setReceiptError(errorMessage);
       showAlert(errorMessage);
     } finally {
@@ -373,14 +390,14 @@ export default function CheckoutPage() {
     };
   }, [orderId, paymentStatus]);
 
-  const handleInputChange = (field: keyof CheckoutFormData, value: any) => {
+  const handleInputChange = <K extends keyof CheckoutFormData>(field: K, value: CheckoutFormData[K]) => {
     if (orderId) {
       return;
     }
     const updatedData = {
       ...formData,
       [field]: value,
-    };
+    } as CheckoutFormData;
     setFormData(updatedData);
     // Сохраняем данные при каждом изменении
     saveFormData(updatedData);
@@ -661,7 +678,7 @@ export default function CheckoutPage() {
               name="deliveryType"
               value="delivery"
               checked={formData.deliveryType === 'delivery'}
-              onChange={(e) => handleInputChange('deliveryType', e.target.value)}
+              onChange={() => handleInputChange('deliveryType', 'delivery')}
               style={{ marginRight: '12px', width: '20px', height: '20px' }}
             />
             <div>
@@ -684,7 +701,7 @@ export default function CheckoutPage() {
               name="deliveryType"
               value="pickup"
               checked={formData.deliveryType === 'pickup'}
-              onChange={(e) => handleInputChange('deliveryType', e.target.value)}
+              onChange={() => handleInputChange('deliveryType', 'pickup')}
               style={{ marginRight: '12px', width: '20px', height: '20px' }}
             />
             <div>
@@ -1120,7 +1137,7 @@ export default function CheckoutPage() {
                       value={payment.value}
                       checked={formData.paymentType === payment.value}
                       disabled={payment.disabled || isOrderLocked}
-                      onChange={(e) => handleInputChange('paymentType', e.target.value)}
+                      onChange={() => handleInputChange('paymentType', payment.value)}
                       style={{ marginRight: '12px', width: '20px', height: '20px' }}
                     />
                     <span style={{ marginRight: '8px', fontSize: '20px' }}>{payment.icon}</span>

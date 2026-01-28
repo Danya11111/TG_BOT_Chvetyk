@@ -3,6 +3,13 @@ import { customerData } from './customer-data';
 
 dotenv.config();
 
+function toInt(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
 const requiredInProduction = [
   'DB_HOST',
   'DB_PORT',
@@ -52,6 +59,10 @@ export const config = {
     orderSourceId: process.env.POSIFLORA_ORDER_SOURCE_ID || '',
     customerSourceId: process.env.POSIFLORA_CUSTOMER_SOURCE_ID || '',
     createdByWorkerId: process.env.POSIFLORA_CREATED_BY_WORKER_ID || '',
+    // Used to create order-lines for showcase bouquets (bouquets require an inventory-item in order-line)
+    showcaseBouquetItemId: process.env.POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID || '',
+    // Controls whether we actually POST /orders or only preflight-check dependencies (no live orders)
+    orderCreateMode: (process.env.POSIFLORA_ORDER_CREATE_MODE || 'dry-run') as 'live' | 'dry-run',
     defaultCountryCode: parseInt(process.env.POSIFLORA_DEFAULT_COUNTRY_CODE || '7', 10),
     deliveryTimeWindowMinutes: parseInt(process.env.POSIFLORA_DELIVERY_TIME_WINDOW_MINUTES || '60', 10),
     requestTimeoutMs: parseInt(process.env.POSIFLORA_REQUEST_TIMEOUT_MS || '15000', 10),
@@ -72,9 +83,29 @@ export const config = {
     groupChatId: process.env.MANAGER_GROUP_CHAT_ID || customerData.managerGroupChatId,
   },
 
+  // Orders moderation chat/topic (payments, receipts, approve/reject)
+  orders: {
+    groupChatId:
+      toInt(process.env.ORDERS_GROUP_CHAT_ID) ||
+      toInt(process.env.MANAGER_GROUP_CHAT_ID) ||
+      toInt(customerData.managerGroupChatId) ||
+      null,
+    // Optional: forum topic id (message_thread_id) for "Заказы"
+    threadId: toInt(process.env.ORDERS_THREAD_ID) || null,
+  },
+
   // Support contacts
   support: {
     managerPhone: customerData.managerPhone,
+    groupChatId:
+      toInt(process.env.SUPPORT_GROUP_CHAT_ID) ||
+      toInt(process.env.MANAGER_GROUP_CHAT_ID) ||
+      toInt(customerData.managerGroupChatId) ||
+      null,
+    // Optional: forum topic id (message_thread_id) for "Поддержка клиентов"
+    logThreadId: toInt(process.env.SUPPORT_LOG_THREAD_ID) || null,
+    // For displaying timestamps in logs
+    timeZone: process.env.SUPPORT_TIME_ZONE || 'Europe/Moscow',
   },
   
   // CORS

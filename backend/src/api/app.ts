@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from '../config';
 import { ForbiddenError } from '../utils/errors';
+import { logger } from '../utils/logger';
 import { requestLogger } from './middlewares/request-logger';
 import { errorHandler } from './middlewares/error-handler';
 import { notFoundHandler } from './middlewares/not-found-handler';
@@ -76,7 +77,6 @@ export function createApp(): Express {
 
   // GET endpoint для проверки доступности webhook (Telegram может проверять через GET)
   app.get('/api/telegram/webhook', (req, res) => {
-    const { logger } = require('../utils/logger');
     logger.info('🔍 GET webhook check request', {
       userAgent: req.headers['user-agent'],
       ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
@@ -88,7 +88,6 @@ export function createApp(): Express {
   // ВАЖНО: Этот endpoint должен быть ДО express.json(), чтобы получить raw body
   app.post('/api/telegram/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const startTime = Date.now();
-    const { logger } = await import('../utils/logger');
     
     // Отвечаем сразу, чтобы Telegram знал, что endpoint работает
     // Это критически важно - Telegram удаляет webhook, если не получает быстрый ответ

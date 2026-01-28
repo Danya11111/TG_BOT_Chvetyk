@@ -86,7 +86,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
   // Проверяем, что callback пришел из группы менеджеров
   // Разрешаем нажимать кнопку любому участнику группы
   const messageChatId = (ctx.callbackQuery as any)?.message?.chat?.id;
-  const managerGroupChatId = Number(config.managers.groupChatId);
+  const managerGroupChatId = config.orders.groupChatId ?? Number(config.managers.groupChatId);
   
   logger.info('Checking manager group access', {
     messageChatId,

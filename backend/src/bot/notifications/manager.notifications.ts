@@ -105,7 +105,8 @@ const formatTelegramContact = (telegramId?: number, telegramUsername?: string): 
 
 export async function notifyManagerPaymentRequest(order: PaymentRequestNotification): Promise<void> {
   try {
-    const chatId = Number(config.managers.groupChatId);
+    const chatId = config.orders.groupChatId ?? Number(config.managers.groupChatId);
+    const threadId = config.orders.threadId;
     const bot = getBot();
     const itemsText = order.items
       .map(
@@ -157,7 +158,7 @@ export async function notifyManagerPaymentRequest(order: PaymentRequestNotificat
     }
 
     try {
-      await bot.telegram.sendMessage(chatId, message);
+      await bot.telegram.sendMessage(chatId, message, threadId ? { message_thread_id: threadId } : undefined);
       logger.info(`Payment request sent to manager group for order ${order.orderNumber}`);
     } catch (error) {
       logger.error('Failed to send payment request to manager group:', error);
@@ -172,7 +173,8 @@ export async function notifyManagerPaymentReceipt(
   receipt: PaymentReceiptNotification
 ): Promise<void> {
   try {
-    const chatId = Number(config.managers.groupChatId);
+    const chatId = config.orders.groupChatId ?? Number(config.managers.groupChatId);
+    const threadId = config.orders.threadId;
     const bot = getBot();
     const caption =
       `🧾 ЧЕК ПО ОПЛАТЕ\n` +
@@ -242,6 +244,7 @@ export async function notifyManagerPaymentReceipt(
     try {
       logger.info('Sending receipt to manager group', {
         chatId,
+        threadId,
         orderId: receipt.orderId,
         orderNumber: receipt.orderNumber,
         imageBufferSize: receipt.imageBuffer.length,
@@ -253,7 +256,8 @@ export async function notifyManagerPaymentReceipt(
         { source: receipt.imageBuffer, filename: receipt.fileName || 'receipt.jpg' },
         { 
           caption,
-          reply_markup: keyboard.reply_markup
+          reply_markup: keyboard.reply_markup,
+          ...(threadId ? { message_thread_id: threadId } : {}),
         }
       );
       

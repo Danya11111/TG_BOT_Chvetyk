@@ -90,6 +90,7 @@ export class ProductService {
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE 1=1
+          AND (c.is_active = true OR c.id IS NULL)
       `;
 
       const params: any[] = [];

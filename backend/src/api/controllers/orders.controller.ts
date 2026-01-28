@@ -65,6 +65,14 @@ class OrdersController {
     try {
       await client.query('BEGIN');
 
+      const productIds = payload.items
+        .map((item) => item.productId)
+        .filter((id) => Number.isFinite(id));
+
+      if (!productIds.length) {
+        throw new ValidationError('Order items are invalid');
+      }
+
       const userResult = await client.query(
         `INSERT INTO users (telegram_id, telegram_username, name, phone, email, updated_at)
          VALUES ($1, $2, $3, $4, $5, NOW())
@@ -90,10 +98,84 @@ class OrdersController {
         throw new ValidationError('Unable to create user');
       }
 
-      const subtotal = payload.items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
+      // Resolve product data server-side (price/name/images) to avoid client-side tampering
+      const productsResult = await client.query(
+        `SELECT id,
+                name,
+                price,
+                in_stock,
+                images,
+                posiflora_id,
+                attributes->>'source' AS source
+         FROM products
+         WHERE id = ANY($1::int[])`,
+        [productIds]
       );
+
+      const productById = new Map<number, any>();
+      for (const row of productsResult.rows) {
+        productById.set(Number(row.id), row);
+      }
+
+      // Validate and build normalized order items
+      const usedBouquetProductIds = new Set<number>();
+      const normalizedItems = payload.items.map((item) => {
+        const product = productById.get(item.productId);
+        if (!product) {
+          throw new NotFoundError(`Product not found: ${item.productId}`);
+        }
+        if (product.in_stock === false) {
+          throw new ValidationError(`Product is out of stock: ${product.name || item.productId}`);
+        }
+
+        const source: string | null = product.source || null;
+        const isShowcaseBouquet =
+          source === 'posiflora-showcase-bouquets' || source === 'posiflora-bouquets';
+
+        if (isShowcaseBouquet) {
+          // Showcase bouquets are unique items, only qty=1 allowed
+          if (item.quantity !== 1) {
+            throw new ValidationError('Showcase bouquets can be ordered only with quantity = 1');
+          }
+          if (usedBouquetProductIds.has(item.productId)) {
+            throw new ValidationError('Showcase bouquet cannot be ordered more than once');
+          }
+          usedBouquetProductIds.add(item.productId);
+        }
+
+        const price = Number(product.price);
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new ValidationError(`Invalid product price: ${product.name || item.productId}`);
+        }
+
+        const imagesRaw = product.images;
+        const imagesArray: string[] = Array.isArray(imagesRaw)
+          ? imagesRaw
+          : typeof imagesRaw === 'string'
+              ? (() => {
+                  try {
+                    const parsed = JSON.parse(imagesRaw);
+                    return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                    return [];
+                  }
+                })()
+              : [];
+        const productImage = imagesArray.find((x) => typeof x === 'string' && x.length > 0) || null;
+
+        return {
+          productId: item.productId,
+          productName: String(product.name || item.productName || `Товар ${item.productId}`),
+          price,
+          quantity: item.quantity,
+          total: price * item.quantity,
+          productImage,
+          posifloraId: product.posiflora_id as string | null,
+          posifloraType: isShowcaseBouquet ? ('bouquets' as const) : ('inventory-items' as const),
+        };
+      });
+
+      const subtotal = normalizedItems.reduce((sum, item) => sum + item.total, 0);
       const total = subtotal;
       const orderNumber = generateOrderNumber();
 
@@ -149,32 +231,9 @@ class OrdersController {
 
       const order = orderResult.rows[0];
 
-      const productIds = payload.items.map((item) => item.productId).filter((id) => Number.isFinite(id));
-      const existingProductsResult = productIds.length
-        ? await client.query(
-            `SELECT id FROM products WHERE id = ANY($1::int[])`,
-            [productIds]
-          )
-        : { rows: [] as Array<{ id: number }> };
-      const existingProductIds = new Set(existingProductsResult.rows.map((row) => row.id));
+      const posifloraMissingItems = normalizedItems.filter((item) => !item.posifloraId);
 
-      const posifloraIdsResult = productIds.length
-        ? await client.query(
-            `SELECT id, posiflora_id FROM products WHERE id = ANY($1::int[])`,
-            [productIds]
-          )
-        : { rows: [] as Array<{ id: number; posiflora_id: string | null }> };
-      const posifloraIdMap = new Map(
-        posifloraIdsResult.rows
-          .filter((row) => row.posiflora_id)
-          .map((row) => [row.id, row.posiflora_id as string])
-      );
-      const posifloraMissingItems = payload.items.filter(
-        (item) => !posifloraIdMap.get(item.productId)
-      );
-
-      for (const item of payload.items) {
-        const resolvedProductId = existingProductIds.has(item.productId) ? item.productId : null;
+      for (const item of normalizedItems) {
         await client.query(
           `INSERT INTO order_items (
              order_id,
@@ -187,12 +246,12 @@ class OrdersController {
            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             order.id,
-            resolvedProductId,
+            item.productId,
             item.productName,
             item.price,
             item.quantity,
-            item.price * item.quantity,
-            item.image || null,
+            item.total,
+            item.productImage,
           ]
         );
       }
@@ -207,7 +266,7 @@ class OrdersController {
 
       try {
         if (config.posiflora.enabled && !posifloraMissingItems.length) {
-          const posifloraOrderId = await posifloraOrderService.createOrder({
+          const posifloraPayload = {
             orderId: order.id,
             orderNumber: order.order_number,
             customer: {
@@ -227,19 +286,30 @@ class OrdersController {
             },
             comment: payload.comment || null,
             cardText: payload.cardText,
-            items: payload.items.map((item) => ({
-              posifloraId: posifloraIdMap.get(item.productId)!,
+            items: normalizedItems.map((item) => ({
+              posifloraId: item.posifloraId!,
+              posifloraType: item.posifloraType,
               name: item.productName,
               price: item.price,
               quantity: item.quantity,
             })),
-          });
+          };
 
-          if (posifloraOrderId) {
-            await db.query(
-              'UPDATE orders SET posiflora_order_id = $1 WHERE id = $2',
-              [posifloraOrderId, order.id]
-            );
+          if (config.posiflora.orderCreateMode === 'dry-run') {
+            await posifloraOrderService.dryRunOrder(posifloraPayload);
+            logger.info('Posiflora order dry-run ok (not created)', {
+              orderId: order.id,
+              orderNumber: order.order_number,
+            });
+          } else {
+            const posifloraOrderId = await posifloraOrderService.createOrder(posifloraPayload);
+
+            if (posifloraOrderId) {
+              await db.query('UPDATE orders SET posiflora_order_id = $1 WHERE id = $2', [
+                posifloraOrderId,
+                order.id,
+              ]);
+            }
           }
         } else if (config.posiflora.enabled && posifloraMissingItems.length) {
           logger.warn('Posiflora sync skipped: missing product mapping', {
@@ -285,7 +355,13 @@ class OrdersController {
           cardText: payload.cardText,
           comment: payload.comment || undefined,
           total,
-          items: payload.items,
+          items: normalizedItems.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.productImage,
+          })),
         });
       });
     } catch (error) {
