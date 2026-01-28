@@ -76,7 +76,7 @@ async function closeInactiveTicketsOnce(): Promise<void> {
       }
 
       // Optional: write to support log thread (managers only), client is not notified.
-      if (config.support.logThreadId) {
+      if (config.support.logThreadId && Number(row.group_chat_id) === Number(config.support.groupChatId)) {
         const clientLabel = row.customer_name?.trim()
           ? `${row.customer_name}${row.telegram_username ? ` (@${row.telegram_username})` : ''}`
           : row.telegram_username
