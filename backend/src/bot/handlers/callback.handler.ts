@@ -3,6 +3,7 @@ import { db } from '../../database/connection';
 import { config } from '../../config';
 import { ORDER_STATUSES, PAYMENT_STATUSES } from '../../utils/constants';
 import { logger } from '../../utils/logger';
+import { getLoyaltyInfoByTelegramId, syncUserBonusesToPosiflora } from '../../services/loyalty.service';
 import {
   clearSupportPending,
   clearSupportSession,
@@ -281,8 +282,12 @@ export async function handleCallback(ctx: Context): Promise<void> {
 
     const orderDetailsResult = await db.query(
       `SELECT o.order_number,
+              o.subtotal,
               o.total,
+              o.bonus_used,
+              o.bonus_accrued,
               o.created_at,
+              u.id AS user_id,
               u.telegram_id
        FROM orders o
        INNER JOIN users u ON o.user_id = u.id
@@ -292,6 +297,59 @@ export async function handleCallback(ctx: Context): Promise<void> {
 
     if (orderDetailsResult.rows.length) {
       const orderDetails = orderDetailsResult.rows[0];
+      const userId = Number(orderDetails.user_id || 0);
+      const telegramId = Number(orderDetails.telegram_id || 0);
+      const bonusUsed = Number(orderDetails.bonus_used || 0);
+      const bonusAccruedExisting = Number(orderDetails.bonus_accrued || 0);
+
+      let bonusAccrued = 0;
+      try {
+        if (action === 'confirm' && userId && telegramId && bonusAccruedExisting <= 0) {
+          const loyalty = await getLoyaltyInfoByTelegramId(telegramId);
+          const percent = Number(loyalty.tier.cashbackPercent || 0);
+          const paidTotal = Number(orderDetails.total || 0);
+          bonusAccrued = Math.max(0, Math.floor((paidTotal * percent) / 100));
+          if (bonusAccrued > 0) {
+            await db.query(
+              `UPDATE users
+               SET bonus_balance = bonus_balance + $1,
+                   updated_at = NOW()
+               WHERE id = $2`,
+              [bonusAccrued, userId]
+            );
+            await db.query(`UPDATE orders SET bonus_accrued = $1 WHERE id = $2`, [bonusAccrued, orderId]);
+            await db.query(
+              `INSERT INTO bonus_history (user_id, order_id, type, amount, description)
+               VALUES ($1, $2, 'accrued', $3, $4)`,
+              [userId, orderId, bonusAccrued, 'ORDER_CASHBACK']
+            );
+            void syncUserBonusesToPosiflora(telegramId);
+          }
+        }
+
+        if (action === 'reject' && userId && telegramId && bonusUsed > 0) {
+          await db.query(
+            `UPDATE users
+             SET bonus_balance = bonus_balance + $1,
+                 updated_at = NOW()
+             WHERE id = $2`,
+            [bonusUsed, userId]
+          );
+          await db.query(
+            `INSERT INTO bonus_history (user_id, order_id, type, amount, description)
+             VALUES ($1, $2, 'cancelled', $3, $4)`,
+            [userId, orderId, bonusUsed, 'ORDER_BONUS_REFUND']
+          );
+          void syncUserBonusesToPosiflora(telegramId);
+        }
+      } catch (bonusError) {
+        logger.warn('Bonus processing failed', {
+          orderId,
+          action,
+          error: bonusError instanceof Error ? bonusError.message : String(bonusError),
+        });
+      }
+
       const itemsResult = await db.query(
         `SELECT product_name, product_price, quantity, total
          FROM order_items
@@ -313,6 +371,8 @@ export async function handleCallback(ctx: Context): Promise<void> {
         `📦 Заказ #${orderDetails.order_number}\n` +
         `🧾 Состав заказа:\n${itemsText}\n\n` +
         `💰 Сумма: ${Number(orderDetails.total).toFixed(2)} ₽\n` +
+        (bonusUsed > 0 ? `🎁 Списано бонусами: ${Number(bonusUsed).toFixed(0)} ₽\n` : '') +
+        (action === 'confirm' && bonusAccrued > 0 ? `✨ Начислено бонусов: ${Number(bonusAccrued).toFixed(0)} ₽\n` : '') +
         `🕒 Время оформления: ${formattedTime}\n` +
         (action === 'confirm'
           ? '\nОплата завершена, чек сформирован. Спасибо за заказ!'

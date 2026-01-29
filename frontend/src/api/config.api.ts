@@ -37,6 +37,10 @@ export interface CustomerConfigResponse {
   bonuses: {
     title: string;
     rules: string[];
+    welcomeBonus?: number;
+    defaultCashbackPercent?: number;
+    maxSpendPercent?: number;
+    tiers?: Array<{ title: string; cashbackPercent: number; fromTotalSpent: number }>;
   };
   payments: {
     title: string;

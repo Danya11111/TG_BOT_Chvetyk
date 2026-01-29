@@ -7,6 +7,8 @@ import { notifyManagerPaymentReceipt, notifyManagerPaymentRequest } from '../../
 import { logger } from '../../utils/logger';
 import { posifloraOrderService } from '../../integrations/posiflora/order.service';
 import { config } from '../../config';
+import { getLoyaltyInfoByTelegramId, syncUserBonusesToPosiflora } from '../../services/loyalty.service';
+import { productService } from '../../services/product.service';
 
 interface CreateOrderPayload {
   customer: {
@@ -34,6 +36,7 @@ interface CreateOrderPayload {
   cardText: string;
   comment?: string;
   paymentType: string;
+  useBonuses?: boolean;
   items: Array<{
     productId: number;
     productName: string;
@@ -83,7 +86,7 @@ class OrdersController {
            phone = EXCLUDED.phone,
            email = EXCLUDED.email,
            updated_at = NOW()
-         RETURNING id`,
+         RETURNING id, bonus_balance`,
         [
           telegramUser.id,
           telegramUser.username || null,
@@ -97,28 +100,20 @@ class OrdersController {
       if (!userId) {
         throw new ValidationError('Unable to create user');
       }
+      const userBonusBalance = Number(userResult.rows[0]?.bonus_balance || 0);
 
-      // Resolve product data server-side (price/name/images) to avoid client-side tampering
-      const productsResult = await client.query(
-        `SELECT id,
-                name,
-                price,
-                in_stock,
-                images,
-                posiflora_id,
-                attributes->>'source' AS source
-         FROM products
-         WHERE id = ANY($1::int[])`,
-        [productIds]
-      );
-
-      const productById = new Map<number, any>();
-      for (const row of productsResult.rows) {
-        productById.set(Number(row.id), row);
+      // Resolve product data from Floria (price/name/images) to avoid client-side tampering
+      const uniqueIds = [...new Set(productIds)];
+      const productById = new Map<number, Awaited<ReturnType<typeof productService.getProductById>>>();
+      for (const id of uniqueIds) {
+        try {
+          const product = await productService.getProductById(id);
+          productById.set(product.id, product);
+        } catch {
+          throw new NotFoundError(`Product not found: ${id}`);
+        }
       }
 
-      // Validate and build normalized order items
-      const usedBouquetProductIds = new Set<number>();
       const normalizedItems = payload.items.map((item) => {
         const product = productById.get(item.productId);
         if (!product) {
@@ -128,39 +123,12 @@ class OrdersController {
           throw new ValidationError(`Product is out of stock: ${product.name || item.productId}`);
         }
 
-        const source: string | null = product.source || null;
-        const isShowcaseBouquet =
-          source === 'posiflora-showcase-bouquets' || source === 'posiflora-bouquets';
-
-        if (isShowcaseBouquet) {
-          // Showcase bouquets are unique items, only qty=1 allowed
-          if (item.quantity !== 1) {
-            throw new ValidationError('Showcase bouquets can be ordered only with quantity = 1');
-          }
-          if (usedBouquetProductIds.has(item.productId)) {
-            throw new ValidationError('Showcase bouquet cannot be ordered more than once');
-          }
-          usedBouquetProductIds.add(item.productId);
-        }
-
         const price = Number(product.price);
         if (!Number.isFinite(price) || price <= 0) {
           throw new ValidationError(`Invalid product price: ${product.name || item.productId}`);
         }
 
-        const imagesRaw = product.images;
-        const imagesArray: string[] = Array.isArray(imagesRaw)
-          ? imagesRaw
-          : typeof imagesRaw === 'string'
-              ? (() => {
-                  try {
-                    const parsed = JSON.parse(imagesRaw);
-                    return Array.isArray(parsed) ? parsed : [];
-                  } catch {
-                    return [];
-                  }
-                })()
-              : [];
+        const imagesArray: string[] = Array.isArray(product.images) ? product.images : [];
         const productImage = imagesArray.find((x) => typeof x === 'string' && x.length > 0) || null;
 
         return {
@@ -170,13 +138,17 @@ class OrdersController {
           quantity: item.quantity,
           total: price * item.quantity,
           productImage,
-          posifloraId: product.posiflora_id as string | null,
-          posifloraType: isShowcaseBouquet ? ('bouquets' as const) : ('inventory-items' as const),
+          posifloraId: null as string | null,
+          posifloraType: 'inventory-items' as const,
         };
       });
 
       const subtotal = normalizedItems.reduce((sum, item) => sum + item.total, 0);
-      const total = subtotal;
+      const loyalty = await getLoyaltyInfoByTelegramId(telegramUser.id);
+      const maxToUseByPercent = (subtotal * loyalty.maxSpendPercent) / 100;
+      const maxToUse = Math.max(0, Math.floor(Math.min(userBonusBalance, maxToUseByPercent)));
+      const bonusUsed = payload.useBonuses ? maxToUse : 0;
+      const total = Math.max(0, subtotal - bonusUsed);
       const orderNumber = generateOrderNumber();
 
       const orderResult = await client.query(
@@ -194,6 +166,8 @@ class OrdersController {
            delivery_time,
            payment_type,
            payment_status,
+           bonus_used,
+           bonus_accrued,
            subtotal,
            total,
            comment,
@@ -203,7 +177,7 @@ class OrdersController {
          )
          VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-           $11, $12, $13, $14, $15, $16, $17, $18, $19
+           $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
          )
          RETURNING id, order_number, total, status, payment_status, created_at`,
         [
@@ -220,6 +194,8 @@ class OrdersController {
           payload.delivery.time,
           payload.paymentType,
           PAYMENT_STATUSES.PENDING_CONFIRMATION,
+          bonusUsed,
+          0,
           subtotal,
           total,
           payload.comment || null,
@@ -231,7 +207,25 @@ class OrdersController {
 
       const order = orderResult.rows[0];
 
-      const posifloraMissingItems = normalizedItems.filter((item) => !item.posifloraId);
+      // Reserve bonuses immediately to avoid double spend
+      if (bonusUsed > 0) {
+        const updatedBonus = await client.query(
+          `UPDATE users
+           SET bonus_balance = bonus_balance - $1,
+               updated_at = NOW()
+           WHERE id = $2 AND bonus_balance >= $1
+           RETURNING bonus_balance`,
+          [bonusUsed, userId]
+        );
+        if (!updatedBonus.rows.length) {
+          throw new ValidationError('Недостаточно бонусов для списания');
+        }
+        await client.query(
+          `INSERT INTO bonus_history (user_id, order_id, type, amount, description)
+           VALUES ($1, $2, 'used', $3, $4)`,
+          [userId, order.id, bonusUsed, 'ORDER_BONUS_SPEND']
+        );
+      }
 
       for (const item of normalizedItems) {
         await client.query(
@@ -265,7 +259,8 @@ class OrdersController {
       await client.query('COMMIT');
 
       try {
-        if (config.posiflora.enabled && !posifloraMissingItems.length) {
+        // Posiflora: create order header only (no line items — products from Floria have no posiflora_id)
+        if (config.posiflora.enabled) {
           const posifloraPayload = {
             orderId: order.id,
             orderNumber: order.order_number,
@@ -286,18 +281,13 @@ class OrdersController {
             },
             comment: payload.comment || null,
             cardText: payload.cardText,
-            items: normalizedItems.map((item) => ({
-              posifloraId: item.posifloraId!,
-              posifloraType: item.posifloraType,
-              name: item.productName,
-              price: item.price,
-              quantity: item.quantity,
-            })),
+            byBonuses: bonusUsed > 0,
+            items: [] as Array<{ posifloraId: string; posifloraType: 'inventory-items' | 'bouquets'; name: string; price: number; quantity: number }>,
           };
 
           if (config.posiflora.orderCreateMode === 'dry-run') {
             await posifloraOrderService.dryRunOrder(posifloraPayload);
-            logger.info('Posiflora order dry-run ok (not created)', {
+            logger.info('Posiflora order dry-run ok (header only, not created)', {
               orderId: order.id,
               orderNumber: order.order_number,
             });
@@ -311,12 +301,6 @@ class OrdersController {
               ]);
             }
           }
-        } else if (config.posiflora.enabled && posifloraMissingItems.length) {
-          logger.warn('Posiflora sync skipped: missing product mapping', {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            missingProductIds: posifloraMissingItems.map((item) => item.productId),
-          });
         }
       } catch (error) {
         logger.error('Posiflora order sync failed', {
@@ -330,10 +314,11 @@ class OrdersController {
         buildSuccessResponse({
           id: order.id,
           orderNumber: order.order_number,
-          total: order.total,
+          total: Number(order.total),
           status: order.status,
           paymentStatus: order.payment_status,
           createdAt: order.created_at,
+          bonusUsed,
         })
       );
 
@@ -363,6 +348,9 @@ class OrdersController {
             image: item.productImage,
           })),
         });
+
+        // Best-effort: keep Posiflora customer points in sync after reserving bonuses
+        void syncUserBonusesToPosiflora(telegramUser.id);
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -587,6 +575,75 @@ class OrdersController {
     });
 
     res.json(buildSuccessResponse({ ok: true }));
+  }
+
+  async cancel(req: Request, res: Response): Promise<void> {
+    const telegramUser = req.user;
+    if (!telegramUser) {
+      throw new UnauthorizedError('Missing Telegram user');
+    }
+
+    const orderId = parseInt(req.params.id, 10);
+    if (Number.isNaN(orderId)) {
+      throw new ValidationError('Invalid order ID');
+    }
+
+    const orderResult = await db.query(
+      `SELECT o.id, o.user_id, o.bonus_used, o.status, o.payment_status
+       FROM orders o
+       INNER JOIN users u ON o.user_id = u.id
+       WHERE o.id = $1 AND u.telegram_id = $2`,
+      [orderId, telegramUser.id]
+    );
+
+    if (!orderResult.rows.length) {
+      throw new NotFoundError('Order not found');
+    }
+
+    const order = orderResult.rows[0] as {
+      id: number;
+      user_id: number;
+      bonus_used: number;
+      status: string;
+      payment_status: string;
+    };
+
+    if (
+      order.status !== ORDER_STATUSES.PENDING ||
+      order.payment_status !== PAYMENT_STATUSES.PENDING_CONFIRMATION
+    ) {
+      throw new ValidationError('Заказ нельзя отменить в текущем статусе');
+    }
+
+    const bonusUsed = Number(order.bonus_used) || 0;
+
+    if (bonusUsed > 0) {
+      await db.query(
+        `UPDATE users
+         SET bonus_balance = bonus_balance + $1, updated_at = NOW()
+         WHERE id = $2`,
+        [bonusUsed, order.user_id]
+      );
+      await db.query(
+        `INSERT INTO bonus_history (user_id, order_id, type, amount, description)
+         VALUES ($1, $2, 'cancelled', $3, 'ORDER_BONUS_REFUND')`,
+        [order.user_id, order.id, bonusUsed]
+      );
+    }
+
+    await db.query(
+      `UPDATE orders SET status = $1 WHERE id = $2`,
+      [ORDER_STATUSES.CANCELLED, order.id]
+    );
+    await db.query(
+      `INSERT INTO order_status_history (order_id, status, comment)
+       VALUES ($1, $2, $3)`,
+      [order.id, ORDER_STATUSES.CANCELLED, 'Отменён клиентом']
+    );
+
+    await syncUserBonusesToPosiflora(telegramUser.id);
+
+    res.json(buildSuccessResponse({ success: true, message: 'Заказ отменён' }));
   }
 }
 

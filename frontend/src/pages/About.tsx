@@ -179,6 +179,23 @@ export default function AboutPage() {
                 <li key={rule}>{rule}</li>
               ))}
             </ul>
+            {typeof config?.bonuses?.welcomeBonus === 'number' && (
+              <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Приветственный бонус: <strong style={{ color: 'var(--text-primary)' }}>{config.bonuses.welcomeBonus} ₽</strong> (начисляется один раз).
+              </div>
+            )}
+            {Array.isArray(config?.bonuses?.tiers) && config.bonuses.tiers.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Категории клиентов</div>
+                <ul style={{ margin: '0 0 0 16px', padding: 0, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  {config.bonuses.tiers.map((tier) => (
+                    <li key={`${tier.title}-${tier.fromTotalSpent}`}>
+                      {tier.title}: кэшбек {tier.cashbackPercent}% (от {tier.fromTotalSpent.toLocaleString('ru-RU')} ₽)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px', border: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>
             <div style={{ fontWeight: 600, marginBottom: '6px' }}>{config?.payments?.title || 'Способы оплаты'}</div>

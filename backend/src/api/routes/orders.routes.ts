@@ -24,5 +24,10 @@ router.post(
   validateRequest(uploadReceiptSchema, 'body'),
   asyncHandler(ordersController.uploadReceipt.bind(ordersController))
 );
+router.post(
+  '/:id/cancel',
+  validateRequest(idParamSchema, 'params'),
+  asyncHandler(ordersController.cancel.bind(ordersController))
+);
 
 export default router;

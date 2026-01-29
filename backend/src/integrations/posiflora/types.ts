@@ -19,6 +19,7 @@ export interface PosifloraCustomerAttributes {
   email?: string | null;
   currentPoints?: number;
   countryCode?: number | null;
+  updatedAt?: string;
 }
 
 export interface PosifloraCustomerResource {

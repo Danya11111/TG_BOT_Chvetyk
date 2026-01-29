@@ -47,6 +47,7 @@ export const createOrderSchema = Joi.object({
   paymentType: Joi.string()
     .valid(PAYMENT_TYPES.CARD_REQUISITES, PAYMENT_TYPES.SBP_QR)
     .required(),
+  useBonuses: Joi.boolean().optional(),
   items: Joi.array().min(1).items(orderItemSchema).required(),
 });
 

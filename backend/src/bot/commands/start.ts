@@ -54,12 +54,14 @@ export async function handleStart(ctx: Context): Promise<void> {
       });
       logger.info(`First message sent to user ${userId}`);
 
-      // Сохраняем пользователя в базу данных
-      await db.query(
-        'INSERT INTO users (telegram_id, telegram_username, name, created_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (telegram_id) DO NOTHING',
-        [userId, user.username || null, user.first_name || null]
-      );
-      logger.info(`User ${userId} saved to database`);
+      const profileUrl = config.telegram.webappUrl.replace(/\/$/, '') + '/profile';
+      await ctx.reply('Получите 500 бонусов в подарок — откройте профиль и нажмите кнопку ниже.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🎁 Получить 500 бонусов', web_app: { url: profileUrl } }],
+          ],
+        },
+      });
     } else {
       // Сообщение после нажатия /start (как на картинке 3, но с кнопкой "Открыть каталог")
       const welcomeMessage = formatMessage(customerData.botMessages.existingUserWelcome, {
@@ -74,10 +76,11 @@ export async function handleStart(ctx: Context): Promise<void> {
       const isLocalhost = config.telegram.webappUrl.includes('localhost') || config.telegram.webappUrl.includes('127.0.0.1');
       
       if (isHttps || isLocalhost) {
-        // Если URL HTTPS или localhost - показываем кнопку WebApp
+        const profileUrl = config.telegram.webappUrl.replace(/\/$/, '') + '/profile';
         await ctx.reply(welcomeMessage, {
           reply_markup: {
             inline_keyboard: [
+              [{ text: '🎁 Получить 500 бонусов', web_app: { url: profileUrl } }],
               [{ text: '🌺 Открыть каталог', web_app: { url: config.telegram.webappUrl } }],
             ],
           },
@@ -113,9 +116,11 @@ export async function handleStart(ctx: Context): Promise<void> {
       const isHttps = config.telegram.webappUrl.startsWith('https://');
       
       if (isHttps) {
+        const profileUrl = config.telegram.webappUrl.replace(/\/$/, '') + '/profile';
         await ctx.reply(welcomeMessage, {
           reply_markup: {
             inline_keyboard: [
+              [{ text: '🎁 Получить 500 бонусов', web_app: { url: profileUrl } }],
               [{ text: '🌺 Открыть каталог', web_app: { url: config.telegram.webappUrl } }],
             ],
           },

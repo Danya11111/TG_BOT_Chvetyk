@@ -6,6 +6,7 @@ export interface CreateOrderResponse {
   id: number;
   orderNumber: string;
   total: number;
+  bonusUsed?: number;
   status: string;
   paymentStatus: string;
   createdAt: string;
@@ -54,6 +55,8 @@ export async function createOrder(
   formData: CheckoutFormData,
   items: CartItem[]
 ): Promise<CreateOrderResponse> {
+  const deliveryAsReady = formData.deliveryAsReady !== false;
+  const today = new Date().toISOString().slice(0, 10);
   const payload = {
     customer: {
       name: formData.name,
@@ -64,8 +67,8 @@ export async function createOrder(
       type: formData.deliveryType,
       address: formData.deliveryType === 'delivery' ? formData.address : undefined,
       pickupPointId: formData.pickupPointId || null,
-      date: formData.deliveryDate,
-      time: formData.deliveryTime,
+      date: deliveryAsReady ? today : (formData.deliveryDate || today),
+      time: deliveryAsReady ? '' : (formData.deliveryTime || ''),
     },
     recipient: {
       name: formData.recipientName,
@@ -74,6 +77,7 @@ export async function createOrder(
     cardText: formData.cardText,
     comment: formData.comment || '',
     paymentType: formData.paymentType,
+    useBonuses: Boolean(formData.useBonuses),
     items: items.map((item) => ({
       productId: item.productId,
       productName: item.productName,
@@ -106,5 +110,10 @@ export async function uploadReceipt(
     imageDataUrl,
     fileName: fileName || null,
   });
+  return response.data.data;
+}
+
+export async function cancelOrder(orderId: number): Promise<{ success: boolean; message?: string }> {
+  const response = await apiClient.post(`/api/orders/${orderId}/cancel`);
   return response.data.data;
 }

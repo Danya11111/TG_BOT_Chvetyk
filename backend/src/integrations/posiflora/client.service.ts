@@ -35,6 +35,21 @@ const findMatchingCustomer = (customers: PosifloraCustomerResource[], phone: str
 };
 
 class PosifloraClientService {
+  async getCustomerById(id: string): Promise<PosifloraCustomerResource | null> {
+    if (!id) return null;
+    try {
+      const response = await posifloraApiClient.request<{ data: PosifloraCustomerResource }>({
+        method: 'GET',
+        url: `/customers/${id}`,
+      });
+      return response?.data || null;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 404) return null;
+      throw error;
+    }
+  }
+
   async findCustomerByPhone(phone: string): Promise<PosifloraCustomerResource | null> {
     const normalized = normalizePhone(phone);
     if (!normalized) return null;
@@ -104,6 +119,24 @@ class PosifloraClientService {
       },
     });
 
+    return response.data;
+  }
+
+  async setCustomerPoints(id: string, points: number): Promise<PosifloraCustomerResource> {
+    const normalizedPoints = Number.isFinite(points) ? Math.max(0, Math.floor(points)) : 0;
+    const response = await posifloraApiClient.request<{ data: PosifloraCustomerResource }>({
+      method: 'PATCH',
+      url: `/customers/${id}`,
+      data: {
+        data: {
+          type: 'customers',
+          id,
+          attributes: {
+            currentPoints: normalizedPoints,
+          },
+        },
+      },
+    });
     return response.data;
   }
 

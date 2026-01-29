@@ -1,7 +1,6 @@
 import cron from 'node-cron';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
-import { syncCatalogFromPosiflora } from './catalog.service';
 import { syncCustomersFromPosiflora } from './customers.service';
 
 let isRunning = false;
@@ -14,7 +13,7 @@ async function runSync(): Promise<void> {
 
   isRunning = true;
   try {
-    await syncCatalogFromPosiflora();
+    // Catalog sync disabled: products come from Floria API only
     await syncCustomersFromPosiflora();
   } catch (error) {
     logger.error('Posiflora sync failed', error);

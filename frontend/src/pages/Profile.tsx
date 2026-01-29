@@ -4,6 +4,7 @@ import WebApp from '@twa-dev/sdk';
 import { useCartStore } from '../store/cart.store';
 import { getOrderStatus, getOrders, OrdersListItem, OrderStatusResponse } from '../api/orders.api';
 import { requestSupport } from '../api/support.api';
+import { getMe, updateMe, claimWelcomeBonus, UserMeResponse } from '../api/users.api';
 import { ProfileAddress, useProfileStore } from '../store/profile.store';
 import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -29,7 +30,14 @@ export default function ProfilePage() {
   const [orderDetails, setOrderDetails] = useState<Record<number, OrderStatusResponse>>({});
   const [orderDetailsLoading, setOrderDetailsLoading] = useState<Record<number, boolean>>({});
   const [supportRequestLoading, setSupportRequestLoading] = useState(false);
-  
+  const [me, setMe] = useState<UserMeResponse | null>(null);
+  const [meLoading, setMeLoading] = useState(false);
+  const [meError, setMeError] = useState<string | null>(null);
+  const [phoneValue, setPhoneValue] = useState('');
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [welcomeBonusClaiming, setWelcomeBonusClaiming] = useState(false);
+  const [welcomeBonusError, setWelcomeBonusError] = useState<string | null>(null);
+
   const cartTotal = useCartStore((state) => state.getTotal());
   const cartItemsCount = useCartStore((state) => state.getItemCount());
   const { addresses, addAddress, updateAddress, removeAddress } = useProfileStore();
@@ -47,6 +55,32 @@ export default function ProfilePage() {
 
   useEffect(() => {
     WebApp.MainButton.hide();
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    setMeLoading(true);
+    setMeError(null);
+    getMe()
+      .then((data) => {
+        if (!isActive) return;
+        setMe(data);
+        setPhoneValue(data?.phone || '');
+      })
+      .catch((error) => {
+        console.warn('Failed to load profile:', error);
+        if (isActive) {
+          setMeError('Не удалось загрузить профиль. Попробуйте позже.');
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setMeLoading(false);
+        }
+      });
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   // Устанавливаем город по умолчанию только один раз при загрузке конфигурации
@@ -410,14 +444,183 @@ export default function ProfilePage() {
                 {username}
               </div>
             )}
-            <div style={{ 
-              fontSize: '14px', 
-              color: 'var(--text-primary)'
-            }}>
-              Бонусы: 0 (1 бонус = 1 рубль)
+            <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+              {meLoading && <span>Загрузка…</span>}
+              {meError && (
+                <div style={{ fontSize: '12px', color: 'var(--color-error)', marginBottom: '6px' }}>
+                  {meError}
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Карточка: Телефон, адреса и бонусы */}
+        {!meLoading && (
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '20px',
+            border: '1px solid var(--border-light)'
+          }}>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
+              Контакт и бонусы
+            </div>
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Телефон</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  value={phoneValue}
+                  onChange={(e) => setPhoneValue(e.target.value)}
+                  placeholder="+7 999 000-00-00"
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-soft)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--bg-surface)',
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (phoneSaving) return;
+                    try {
+                      setPhoneSaving(true);
+                      const updated = await updateMe({ phone: phoneValue });
+                      setMe(updated);
+                      setPhoneValue(updated.phone || '');
+                      try { WebApp.showAlert('Телефон сохранён'); } catch { /* ignore */ }
+                    } catch (e) {
+                      console.error('Failed to update phone:', e);
+                      try { WebApp.showAlert('Не удалось сохранить телефон'); } catch { /* ignore */ }
+                    } finally {
+                      setPhoneSaving(false);
+                    }
+                  }}
+                  disabled={phoneSaving}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: 'var(--color-accent)',
+                    color: 'var(--text-on-accent)',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: phoneSaving ? 'not-allowed' : 'pointer',
+                    opacity: phoneSaving ? 0.7 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {phoneSaving ? '…' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+            <div style={{
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'var(--bg-secondary)',
+              marginBottom: '6px'
+            }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                Бонусы: <strong style={{ fontSize: '18px', color: 'var(--color-accent)' }}>{Number(me?.bonus?.balance ?? 0).toLocaleString('ru-RU')} ₽</strong>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}> (1 бонус = 1 ₽)</span>
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Категория: <strong style={{ color: 'var(--text-primary)' }}>{me?.bonus?.tier?.title || '—'}</strong> · Кэшбек {Number(me?.bonus?.cashbackPercent ?? 0)}%
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                Получите 500 бонусов в подарок — введите телефон и нажмите кнопку ниже.
+              </div>
+            </div>
+            {me?.welcomeBonusClaimed === false && (
+              <div style={{ marginTop: '12px' }}>
+                {welcomeBonusError && (
+                  <div style={{ fontSize: '12px', color: 'var(--color-error)', marginBottom: '8px' }}>
+                    {welcomeBonusError}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  disabled={welcomeBonusClaiming}
+                  onClick={async () => {
+                    const phone = phoneValue.trim().replace(/\s/g, '');
+                    if (!phone) {
+                      setWelcomeBonusError('Введите номер телефона');
+                      return;
+                    }
+                    if (!/^(\+7|8)?[\s-]?\(?[489][0-9]{2}\)?[\s-]?[0-9]{3}[\s-]?[0-9]{2}[\s-]?[0-9]{2}$/.test(phone)) {
+                      setWelcomeBonusError('Введите корректный номер телефона');
+                      return;
+                    }
+                    setWelcomeBonusError(null);
+                    setWelcomeBonusClaiming(true);
+                    try {
+                      const res = await claimWelcomeBonus(phone);
+                      setMe((prev) => prev ? {
+                        ...prev,
+                        welcomeBonusClaimed: true,
+                        bonus: { ...prev.bonus, balance: res.bonusBalance },
+                      } : prev);
+                      setPhoneValue(phone);
+                      try { WebApp.showAlert('Вам начислено 500 бонусов!'); } catch { /* ignore */ }
+                    } catch (e: unknown) {
+                      const msg = e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message;
+                      setWelcomeBonusError(typeof msg === 'string' ? msg : 'Не удалось получить бонусы. Попробуйте позже.');
+                    } finally {
+                      setWelcomeBonusClaiming(false);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '14px 20px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(90deg, rgba(215, 149, 176, 0.7), var(--color-accent))',
+                    color: 'var(--text-on-accent)',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    cursor: welcomeBonusClaiming ? 'not-allowed' : 'pointer',
+                    opacity: welcomeBonusClaiming ? 0.8 : 1,
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <span style={{ position: 'relative', zIndex: 1 }}>
+                    {welcomeBonusClaiming ? 'Загрузка…' : '🎁 Получить 500 бонусов'}
+                  </span>
+                  {!welcomeBonusClaiming && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: '-100%',
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                        animation: 'profile-shimmer 2s infinite',
+                      }}
+                    />
+                  )}
+                </button>
+              </div>
+            )}
+            {me?.welcomeBonusClaimed === true && (
+              <div style={{
+                marginTop: '12px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-secondary)',
+                fontSize: '14px',
+                color: 'var(--text-secondary)',
+              }}>
+                ✓ Приветственный бонус получен
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Вкладки */}
         <div style={{
@@ -736,6 +939,29 @@ export default function ProfilePage() {
 
         {activeTab === 'orders' && (
           <div>
+            {!ordersLoading && !ordersError && orders.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  onClick={() => {
+                    WebApp.showConfirm('Очистить список заказов с экрана? При следующем открытии вкладки заказы снова подгрузятся.', (ok) => {
+                      if (ok) setOrders([]);
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-soft)',
+                    backgroundColor: 'var(--bg-surface)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Очистить историю заказов
+                </button>
+              </div>
+            )}
             {ordersLoading && (
               <div style={{
                 textAlign: 'center',

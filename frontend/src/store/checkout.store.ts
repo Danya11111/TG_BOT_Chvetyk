@@ -16,6 +16,8 @@ export interface CheckoutFormData {
   deliveryType: 'delivery' | 'pickup';
   address: DeliveryAddress;
   pickupPointId?: number;
+  /** По умолчанию true: доставка «по готовности», дата/время не выбираются */
+  deliveryAsReady?: boolean;
   deliveryDate?: string;
   deliveryTime?: string;
   recipientName?: string;
@@ -23,6 +25,7 @@ export interface CheckoutFormData {
   cardText?: string;
   comment: string;
   paymentType: 'card_requisites' | 'sbp_qr';
+  useBonuses?: boolean;
 }
 
 interface CheckoutStore {

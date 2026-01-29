@@ -37,6 +37,7 @@ interface PosifloraOrderPayload {
   };
   comment?: string | null;
   cardText?: string | null;
+  byBonuses?: boolean;
   items: PosifloraOrderItem[];
 }
 
@@ -142,7 +143,10 @@ class PosifloraOrderService {
 
     const normalizedRecipientPhone = normalizePhone(payload.recipient.phone);
 
-    const lines: PosifloraOrderRequest['data']['relationships']['lines']['data'] = payload.items.map((item) => {
+    const lines: PosifloraOrderRequest['data']['relationships']['lines']['data'] =
+      payload.items.length === 0
+        ? []
+        : payload.items.map((item) => {
       const amount = item.price * item.quantity;
       const isBouquet = item.posifloraType === 'bouquets';
       const inventoryItemId = isBouquet ? config.posiflora.showcaseBouquetItemId : item.posifloraId;
@@ -202,7 +206,7 @@ class PosifloraOrderService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           fiscal: false,
-          byBonuses: false,
+          byBonuses: Boolean(payload.byBonuses),
         },
         relationships: {
           store: {
@@ -285,16 +289,13 @@ class PosifloraOrderService {
   async dryRunOrder(payload: PosifloraOrderPayload): Promise<PosifloraOrderRequest> {
     this.ensureEnabled();
 
-    if (!payload.items.length) {
-      throw new Error('Posiflora order requires at least one item');
+    if (payload.items.length > 0) {
+      const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
+      if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
+        throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
+      }
+      await this.preflightOrderDependencies(payload);
     }
-
-    const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
-    if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
-      throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
-    }
-
-    await this.preflightOrderDependencies(payload);
 
     // Do not sync customer in dry-run (no side effects)
     return this.buildOrderPayload(payload, null);
@@ -303,13 +304,11 @@ class PosifloraOrderService {
   async createOrder(payload: PosifloraOrderPayload): Promise<string | null> {
     this.ensureEnabled();
 
-    if (!payload.items.length) {
-      throw new Error('Posiflora order requires at least one item');
-    }
-
-    const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
-    if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
-      throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
+    if (payload.items.length > 0) {
+      const hasBouquets = payload.items.some((item) => item.posifloraType === 'bouquets');
+      if (hasBouquets && !config.posiflora.showcaseBouquetItemId) {
+        throw new Error('POSIFLORA_SHOWCASE_BOUQUET_ITEM_ID is required to create orders with showcase bouquets');
+      }
     }
 
     const customer = await posifloraClientService.syncCustomer(payload.customer);

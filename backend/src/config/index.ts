@@ -49,6 +49,13 @@ export const config = {
     webappUrl: process.env.WEBAPP_URL || 'http://localhost:5173',
   },
   
+  // Floria API (products)
+  floria: {
+    apiBaseUrl: process.env.FLORIA_API_BASE_URL || 'https://flowers5-serv.uplinkweb.ru/5042',
+    token: process.env.FLORIA_API_TOKEN || '',
+    requestTimeoutMs: parseInt(process.env.FLORIA_REQUEST_TIMEOUT_MS || '15000', 10),
+  },
+
   // Posiflora API
   posiflora: {
     enabled: process.env.POSIFLORA_ENABLED === 'true',

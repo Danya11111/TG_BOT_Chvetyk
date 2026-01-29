@@ -58,6 +58,18 @@ export const customerData = {
   // Используется: frontend/About
   bonuses: {
     title: 'Бонусная программа',
+    // Welcome bonus is added once per Telegram user
+    welcomeBonus: 500,
+    // Cashback percent (bonuses accrued after successful payment)
+    defaultCashbackPercent: 5,
+    // Max share of order subtotal that can be paid by bonuses
+    maxSpendPercent: 10,
+    // Customer tiers (shown in Profile/About)
+    tiers: [
+      { title: 'Стандарт', cashbackPercent: 5, fromTotalSpent: 0 },
+      { title: 'Серебро', cashbackPercent: 7, fromTotalSpent: 20000 },
+      { title: 'Золото', cashbackPercent: 10, fromTotalSpent: 50000 },
+    ],
     rules: [
       'Начисляем 5% от суммы заказа.',
       'Начисление действует на любые покупки, кроме оплаты доставки.',

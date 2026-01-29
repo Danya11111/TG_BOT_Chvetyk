@@ -6,7 +6,8 @@ import { getTelegramInitData } from '../utils/initData';
 import { useCartStore } from '../store/cart.store';
 import { useCheckoutStore, CheckoutFormData, DeliveryAddress } from '../store/checkout.store';
 import { useProfileStore } from '../store/profile.store';
-import { createOrder, getOrderStatus, uploadReceipt } from '../api/orders.api';
+import { createOrder, getOrderStatus, uploadReceipt, cancelOrder } from '../api/orders.api';
+import { getMe, UserMeResponse } from '../api/users.api';
 import { useCustomerConfig } from '../hooks/useCustomerConfig';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
@@ -42,6 +43,8 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orderId, setOrderId] = useState<number | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [orderTotal, setOrderTotal] = useState<number | null>(null);
+  const [me, setMe] = useState<UserMeResponse | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'confirmed' | 'rejected'>('idle');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
@@ -51,25 +54,25 @@ export default function CheckoutPage() {
   const [receiptSent, setReceiptSent] = useState(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const [showThankYouModal, setShowThankYouModal] = useState(false);
+  const [orderBonusUsed, setOrderBonusUsed] = useState<number>(0);
+  const [cancelOrderLoading, setCancelOrderLoading] = useState(false);
   const { config: customerConfig } = useCustomerConfig();
 
-  const getMinDeliveryTime = useCallback((dateValue?: string) => {
-    if (!dateValue) {
-      return '';
-    }
+  /** Минимальное время для выбранной даты: для «сегодня» = сейчас + 2 ч, округление вверх до 15 мин; для других дней — пусто. */
+  const getMinDeliveryTime = useCallback((dateValue?: string): string => {
+    if (!dateValue) return '';
     const now = new Date();
-    const deliveryDate = new Date(dateValue);
-    if (Number.isNaN(deliveryDate.getTime())) {
-      return '';
-    }
+    const deliveryDate = new Date(dateValue + 'T00:00:00');
+    if (Number.isNaN(deliveryDate.getTime())) return '';
     const isSameDay = now.toDateString() === deliveryDate.toDateString();
-    if (!isSameDay) {
-      return '';
-    }
-    const minDate = new Date(now.getTime() + 60 * 60 * 1000);
-    const hours = String(minDate.getHours()).padStart(2, '0');
-    const minutes = String(minDate.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
+    if (!isSameDay) return '';
+    const minMs = now.getTime() + 2 * 60 * 60 * 1000;
+    const minDate = new Date(minMs);
+    const totalMinutes = minDate.getHours() * 60 + minDate.getMinutes();
+    const slot = Math.ceil(totalMinutes / 15) * 15;
+    const hours = Math.floor(slot / 60) % 24;
+    const mins = slot % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
   }, []);
 
   // Загружаем сохраненные данные или используем значения по умолчанию
@@ -92,6 +95,7 @@ export default function CheckoutPage() {
         house: '',
         apartment: '',
       },
+      deliveryAsReady: true,
       deliveryDate: '',
       deliveryTime: '',
       recipientName: '',
@@ -99,6 +103,7 @@ export default function CheckoutPage() {
       cardText: '',
       comment: '',
       paymentType: 'card_requisites',
+      useBonuses: false,
     };
   };
 
@@ -130,16 +135,18 @@ export default function CheckoutPage() {
       }
     }
 
-    if (!formData.deliveryDate) {
-      newErrors.deliveryDate = 'Укажите дату';
-    }
-
-    if (!formData.deliveryTime) {
-      newErrors.deliveryTime = 'Укажите время';
-    } else if (formData.deliveryType === 'delivery') {
-      const minTime = getMinDeliveryTime(formData.deliveryDate);
-      if (minTime && formData.deliveryTime < minTime) {
-        newErrors.deliveryTime = `Минимальное время доставки — ${minTime}`;
+    const deliveryAsReady = formData.deliveryAsReady !== false;
+    if (!deliveryAsReady) {
+      if (!formData.deliveryDate) {
+        newErrors.deliveryDate = 'Укажите дату';
+      }
+      if (!formData.deliveryTime) {
+        newErrors.deliveryTime = 'Укажите время';
+      } else if (formData.deliveryType === 'delivery' && formData.deliveryDate) {
+        const minTime = getMinDeliveryTime(formData.deliveryDate);
+        if (minTime && formData.deliveryTime < minTime) {
+          newErrors.deliveryTime = `Минимальное время доставки — ${minTime}`;
+        }
       }
     }
 
@@ -203,10 +210,11 @@ export default function CheckoutPage() {
 
       setOrderId(createdOrder.id);
       setOrderNumber(createdOrder.orderNumber);
+      setOrderTotal(createdOrder.total);
+      setOrderBonusUsed(createdOrder.bonusUsed ?? 0);
       setPaymentStatus('processing');
       setStatusMessage('Заказ оформлен. Ожидаем подтверждения оплаты.');
 
-      clearCart();
       setPaymentStep('payment');
     } catch (error) {
       console.error('Error creating order:', error);
@@ -286,7 +294,7 @@ export default function CheckoutPage() {
     try {
       await uploadReceipt(orderId, receiptPreview, receiptFileName);
       setReceiptSent(true);
-      showAlert('Чек отправлен. Спасибо!');
+      setReceiptError(null);
     } catch (error) {
       console.error('Failed to upload receipt:', error);
       const errorMessage = extractApiErrorMessage(error) || 'Не удалось отправить чек. Попробуйте позже.';
@@ -295,7 +303,40 @@ export default function CheckoutPage() {
     } finally {
       setReceiptUploading(false);
     }
-  }, [orderId, receiptPreview, receiptFileName, showAlert]);
+  }, [orderId, receiptPreview, receiptFileName]);
+
+  const handleCompleteOrder = useCallback(() => {
+    if (!receiptSent || !orderId) return;
+    clearCart();
+    setShowThankYouModal(true);
+  }, [receiptSent, orderId, clearCart]);
+
+  const handleCancelOrder = useCallback(async () => {
+    if (!orderId) return;
+    const confirmed = window.confirm(
+      'Отменить заказ? Вы вернётесь к данным заказа, заказ будет отменён.'
+    );
+    if (!confirmed) return;
+    setCancelOrderLoading(true);
+    try {
+      await cancelOrder(orderId);
+      setOrderId(null);
+      setOrderNumber(null);
+      setOrderTotal(null);
+      setOrderBonusUsed(0);
+      setPaymentStep('form');
+      setPaymentStatus('idle');
+      setReceiptSent(false);
+      setReceiptPreview(null);
+      setReceiptFileName(null);
+      setReceiptError(null);
+    } catch (err) {
+      const msg = extractApiErrorMessage(err);
+      setReceiptError(msg || 'Не удалось отменить заказ');
+    } finally {
+      setCancelOrderLoading(false);
+    }
+  }, [orderId]);
 
   useEffect(() => {
     if (items.length === 0 && !orderId && paymentStep === 'form' && !loading) {
@@ -306,6 +347,42 @@ export default function CheckoutPage() {
   useEffect(() => {
     WebApp.MainButton.hide();
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    getMe()
+      .then((data) => {
+        if (!isActive) return;
+        setMe(data);
+      })
+      .catch((error) => {
+        console.warn('Failed to load user profile:', error);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (orderId) return;
+    const phone = me?.phone || '';
+    if (!phone.trim()) return;
+    if (formData.phone.trim()) return;
+    const updatedData = { ...formData, phone };
+    setFormData(updatedData);
+    saveFormData(updatedData);
+  }, [me?.phone, orderId, formData, saveFormData]);
+
+  useEffect(() => {
+    if (orderId || formData.deliveryAsReady !== false) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (!formData.deliveryDate) {
+      const minT = getMinDeliveryTime(today);
+      const next = { ...formData, deliveryDate: today, deliveryTime: minT || '12:00' };
+      setFormData(next);
+      saveFormData(next);
+    }
+  }, [formData.deliveryAsReady, formData.deliveryDate, orderId, formData, saveFormData]);
 
   useEffect(() => {
     if (!customerConfig?.delivery?.city || orderId) {
@@ -355,7 +432,7 @@ export default function CheckoutPage() {
 
 
   useEffect(() => {
-    if (!orderId || paymentStatus !== 'processing') {
+    if (!orderId || paymentStatus !== 'processing' || receiptSent) {
       return;
     }
 
@@ -388,7 +465,7 @@ export default function CheckoutPage() {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [orderId, paymentStatus]);
+  }, [orderId, paymentStatus, receiptSent]);
 
   const handleInputChange = <K extends keyof CheckoutFormData>(field: K, value: CheckoutFormData[K]) => {
     if (orderId) {
@@ -458,6 +535,16 @@ export default function CheckoutPage() {
   };
 
   const isOrderLocked = orderId !== null;
+  const cartSubtotal = getTotal();
+  const bonusBalance = Number(me?.bonus?.balance || 0);
+  const maxSpendPercent = Number(me?.bonus?.maxSpendPercent || 10);
+  const maxBonusToUse = Math.max(
+    0,
+    Math.floor(Math.min(bonusBalance, (cartSubtotal * maxSpendPercent) / 100))
+  );
+  const bonusesApplied = formData.useBonuses ? maxBonusToUse : 0;
+  const payableTotal = Math.max(0, cartSubtotal - bonusesApplied);
+  const displayedTotal = orderTotal !== null ? orderTotal : payableTotal;
   const sbpEnabled = Boolean(customerConfig?.sbpQr?.enabled);
   const sbpLabel = sbpEnabled
     ? 'Оплата по QR-коду СБП'
@@ -857,61 +944,117 @@ export default function CheckoutPage() {
         <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
           Дата и время
         </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
-              Дата <span style={{ color: 'var(--color-error)' }}>*</span>
-            </label>
-            <input
-              type="date"
-              value={formData.deliveryDate || ''}
-              onChange={(e) => handleInputChange('deliveryDate', e.target.value)}
-              style={{
-                width: '100%',
-                maxWidth: '100%',
-                minWidth: 0,
-                display: 'block',
-                padding: '12px',
-                borderRadius: '8px',
-                border: errors.deliveryDate ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',
-                fontSize: '16px',
-                boxSizing: 'border-box',
-                color: 'var(--text-primary)',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            />
-            {errors.deliveryDate && (
-              <p style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryDate}</p>
-            )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={formData.deliveryAsReady !== false}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              const today = new Date().toISOString().slice(0, 10);
+              const minTime = getMinDeliveryTime(today);
+              handleInputChange('deliveryAsReady', checked);
+              if (!checked) {
+                const next = { ...formData, deliveryAsReady: false, deliveryDate: today, deliveryTime: minTime || '12:00' };
+                setFormData(next);
+                saveFormData(next);
+              }
+            }}
+            style={{ width: '20px', height: '20px' }}
+          />
+          <span style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-primary)' }}>Доставка по готовности</span>
+        </label>
+        {formData.deliveryAsReady !== false ? (
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+            Доставим по готовности букета, без фиксированного времени.
           </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
-              Время <span style={{ color: 'var(--color-error)' }}>*</span>
-            </label>
-            <input
-              type="time"
-              value={formData.deliveryTime || ''}
-              onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
-              min={formData.deliveryType === 'delivery' ? getMinDeliveryTime(formData.deliveryDate) : undefined}
-              style={{
-                width: '100%',
-                maxWidth: '100%',
-                minWidth: 0,
-                display: 'block',
-                padding: '12px',
-                borderRadius: '8px',
-                border: errors.deliveryTime ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',
-                fontSize: '16px',
-                boxSizing: 'border-box',
-                color: 'var(--text-primary)',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            />
-            {errors.deliveryTime && (
-              <p style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryTime}</p>
-            )}
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                Дата <span style={{ color: 'var(--color-error)' }}>*</span>
+              </label>
+              <select
+                value={formData.deliveryDate || ''}
+                onChange={(e) => {
+                  const date = e.target.value;
+                  const minT = getMinDeliveryTime(date);
+                  let time = formData.deliveryTime || minT || '12:00';
+                  if (date && minT && time < minT) time = minT;
+                  const next = { ...formData, deliveryDate: date, deliveryTime: time };
+                  setFormData(next);
+                  saveFormData(next);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: errors.deliveryDate ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',
+                  fontSize: '16px',
+                  boxSizing: 'border-box',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              >
+                {(() => {
+                  const today = new Date();
+                  const options: { value: string; label: string }[] = [];
+                  for (let i = 0; i < 7; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + i);
+                    const value = d.toISOString().slice(0, 10);
+                    const label = i === 0 ? `Сегодня, ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}` : i === 1 ? `Завтра, ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}` : d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+                    options.push({ value, label });
+                  }
+                  return options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>);
+                })()}
+              </select>
+              {errors.deliveryDate && (
+                <p style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryDate}</p>
+              )}
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                Время <span style={{ color: 'var(--color-error)' }}>*</span>
+              </label>
+              <select
+                value={formData.deliveryTime || ''}
+                onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: errors.deliveryTime ? '2px solid var(--color-error)' : '1px solid var(--border-soft)',
+                  fontSize: '16px',
+                  boxSizing: 'border-box',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              >
+                {(() => {
+                  const minTime = getMinDeliveryTime(formData.deliveryDate);
+                  const slots: string[] = [];
+                  for (let h = 0; h < 24; h++) {
+                    for (let m = 0; m < 60; m += 15) {
+                      const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                      if (minTime && formData.deliveryDate) {
+                        const isToday = (() => {
+                          const today = new Date().toISOString().slice(0, 10);
+                          return formData.deliveryDate === today;
+                        })();
+                        if (isToday && t < minTime) continue;
+                      }
+                      slots.push(t);
+                    }
+                  }
+                  return slots.map((s) => <option key={s} value={s}>{s}</option>);
+                })()}
+              </select>
+              {errors.deliveryTime && (
+                <p style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' }}>{errors.deliveryTime}</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Получатель */}
@@ -1042,6 +1185,53 @@ export default function CheckoutPage() {
         />
       </div>
 
+      {/* Бонусы */}
+      {me && (
+        <div
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '16px',
+            border: '1px solid var(--border-light)',
+          }}
+        >
+          <h2 style={{ fontSize: '18px', marginBottom: '12px', fontWeight: '600', color: 'var(--text-primary)' }}>
+            Бонусы
+          </h2>
+          <div style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Баланс: <strong>{bonusBalance.toLocaleString('ru-RU')} ₽</strong>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+            Категория: <strong>{me.bonus.tier.title}</strong> · Кэшбек: <strong>{me.bonus.cashbackPercent}%</strong>
+          </div>
+
+          {maxBonusToUse > 0 ? (
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'center', cursor: isOrderLocked ? 'not-allowed' : 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(formData.useBonuses)}
+                disabled={isOrderLocked}
+                onChange={(e) => handleInputChange('useBonuses', e.target.checked)}
+              />
+              <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                Использовать бонусы (до {maxBonusToUse.toLocaleString('ru-RU')} ₽)
+              </span>
+            </label>
+          ) : (
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Бонусов для списания пока нет.
+            </div>
+          )}
+
+          {Boolean(formData.useBonuses) && maxBonusToUse > 0 && (
+            <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Списываем: <strong>{maxBonusToUse.toLocaleString('ru-RU')} ₽</strong>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Итого */}
       <div style={{
         backgroundColor: 'var(--bg-secondary)',
@@ -1060,7 +1250,7 @@ export default function CheckoutPage() {
             fontWeight: 'bold',
             color: 'var(--color-accent)'
           }}>
-            {getTotal().toLocaleString('ru-RU')} ₽
+            {displayedTotal.toLocaleString('ru-RU')} ₽
           </span>
         </div>
       </div>
@@ -1101,6 +1291,38 @@ export default function CheckoutPage() {
             >
               ← Вернуться к данным заказа
             </button>
+          </div>
+
+          {/* Сумма и бонусы в начале шага оплаты */}
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '16px',
+            border: '1px solid var(--border-light)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: orderBonusUsed > 0 || (orderTotal != null && orderTotal > 0) ? '12px' : 0
+            }}>
+              <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>Сумма к оплате:</span>
+              <span style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--color-accent)' }}>
+                {(orderTotal != null ? orderTotal : displayedTotal).toLocaleString('ru-RU')} ₽
+              </span>
+            </div>
+            {orderBonusUsed > 0 ? (
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                Списано бонусами: <strong style={{ color: 'var(--text-primary)' }}>{orderBonusUsed.toLocaleString('ru-RU')} ₽</strong>
+              </div>
+            ) : (
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                После подтверждения заказа начислится: <strong style={{ color: 'var(--text-primary)' }}>
+                  ~{Math.max(0, Math.floor((Number(orderTotal ?? displayedTotal) * Number(me?.bonus?.cashbackPercent ?? 0)) / 100))} ₽
+                </strong> бонусами (кэшбек {me?.bonus?.cashbackPercent ?? 0}%)
+              </div>
+            )}
           </div>
 
           {/* Способ оплаты */}
@@ -1217,24 +1439,38 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                     Загрузите чек или скриншот оплаты
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleReceiptChange(e.target.files?.[0])}
-                    disabled={receiptUploading}
-                    style={{ display: 'block', width: '100%', marginBottom: '8px' }}
-                  />
+                  <label style={{ display: 'inline-block', marginBottom: '8px' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleReceiptChange(e.target.files?.[0])}
+                      disabled={receiptUploading}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-soft)',
+                      backgroundColor: 'var(--bg-surface)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      cursor: receiptUploading ? 'not-allowed' : 'pointer'
+                    }}>
+                      Выбрать файл
+                    </span>
+                  </label>
                   {receiptPreview && (
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                       <img
                         src={receiptPreview}
                         alt="Чек"
-                        style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                        style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-light)' }}
                       />
                       {receiptFileName && (
-                        <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {receiptFileName}
-                        </div>
+                        </span>
                       )}
                     </div>
                   )}
@@ -1265,6 +1501,25 @@ export default function CheckoutPage() {
                       {receiptError}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={handleCompleteOrder}
+                    disabled={!receiptSent}
+                    style={{
+                      width: '100%',
+                      marginTop: '16px',
+                      padding: '14px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: receiptSent ? 'var(--color-accent)' : 'var(--bg-disabled)',
+                      color: receiptSent ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      cursor: receiptSent ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Завершить заказ
+                  </button>
                 </div>
               </div>
             )}
@@ -1287,24 +1542,38 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                     Загрузите чек или скриншот оплаты
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleReceiptChange(e.target.files?.[0])}
-                    disabled={receiptUploading}
-                    style={{ display: 'block', width: '100%', marginBottom: '8px' }}
-                  />
+                  <label style={{ display: 'inline-block', marginBottom: '8px' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleReceiptChange(e.target.files?.[0])}
+                      disabled={receiptUploading}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-soft)',
+                      backgroundColor: 'var(--bg-surface)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      cursor: receiptUploading ? 'not-allowed' : 'pointer'
+                    }}>
+                      Выбрать файл
+                    </span>
+                  </label>
                   {receiptPreview && (
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                       <img
                         src={receiptPreview}
                         alt="Чек"
-                        style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                        style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-light)' }}
                       />
                       {receiptFileName && (
-                        <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {receiptFileName}
-                        </div>
+                        </span>
                       )}
                     </div>
                   )}
@@ -1335,11 +1604,28 @@ export default function CheckoutPage() {
                       {receiptError}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={handleCompleteOrder}
+                    disabled={!receiptSent}
+                    style={{
+                      width: '100%',
+                      marginTop: '16px',
+                      padding: '14px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: receiptSent ? 'var(--color-accent)' : 'var(--bg-disabled)',
+                      color: receiptSent ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      cursor: receiptSent ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Завершить заказ
+                  </button>
                 </div>
               </div>
             )}
-
-            {/* Кнопка "Оплата завершена" удалена - клиент только загружает чек */}
 
             {orderId && (
               <div style={{
@@ -1362,29 +1648,30 @@ export default function CheckoutPage() {
                 )}
               </div>
             )}
-          </div>
 
-          {/* Итого */}
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '20px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>Итого:</span>
-              <span style={{
-                fontSize: '28px',
-                fontWeight: 'bold',
-                color: 'var(--color-accent)'
-              }}>
-                {getTotal().toLocaleString('ru-RU')} ₽
-              </span>
-            </div>
+            {/* Отменить заказ — внизу шага оплаты */}
+            {orderId && (
+              <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+                <button
+                  type="button"
+                  onClick={handleCancelOrder}
+                  disabled={cancelOrderLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-soft)',
+                    backgroundColor: 'transparent',
+                    color: 'var(--text-secondary)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: cancelOrderLoading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {cancelOrderLoading ? 'Отмена заказа...' : 'Отменить заказ'}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -1392,7 +1679,7 @@ export default function CheckoutPage() {
       <AppFooter />
       <BottomNavigation />
 
-      {/* Модальное окно благодарности */}
+      {/* Модальное окно: заказ успешно завершён */}
       {showThankYouModal && (
         <div
           style={{
@@ -1411,7 +1698,6 @@ export default function CheckoutPage() {
             padding: '20px',
             animation: 'fadeIn 0.3s ease-out'
           }}
-          onClick={() => setShowThankYouModal(false)}
         >
           <div
             style={{
@@ -1428,7 +1714,6 @@ export default function CheckoutPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Иконка успеха */}
             <div
               style={{
                 width: '80px',
@@ -1439,20 +1724,13 @@ export default function CheckoutPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 24px',
-                animation: 'fadeIn 0.5s ease-out 0.2s both'
+                fontSize: '48px',
+                lineHeight: '1'
               }}
             >
-              <div
-                style={{
-                  fontSize: '48px',
-                  lineHeight: '1'
-                }}
-              >
-                🌺
-              </div>
+              🌺
             </div>
 
-            {/* Заголовок */}
             <h2
               style={{
                 fontSize: '24px',
@@ -1463,10 +1741,9 @@ export default function CheckoutPage() {
                 letterSpacing: '-0.02em'
               }}
             >
-              Спасибо за заказ!
+              Заказ успешно завершён
             </h2>
 
-            {/* Текст */}
             <p
               style={{
                 fontSize: '15px',
@@ -1477,10 +1754,9 @@ export default function CheckoutPage() {
                 padding: '0 8px'
               }}
             >
-              После подтверждения оплаты вам придет уведомление. Мы свяжемся с вами для уточнения деталей доставки.
+              После подтверждения оплаты вам придёт уведомление. Статус заказа можно посмотреть в разделе «Мои заказы» в профиле.
             </p>
 
-            {/* Кнопка закрытия */}
             <button
               onClick={() => {
                 setShowThankYouModal(false);
@@ -1513,39 +1789,7 @@ export default function CheckoutPage() {
                 e.currentTarget.style.boxShadow = '0 4px 16px rgba(215, 149, 176, 0.3)';
               }}
             >
-              Вернуться в каталог
-            </button>
-
-            {/* Дополнительная кнопка "Закрыть" */}
-            <button
-              onClick={() => setShowThankYouModal(false)}
-              style={{
-                width: '100%',
-                padding: '10px 24px',
-                marginTop: '12px',
-                borderRadius: '16px',
-                border: '1px solid rgba(215, 149, 176, 0.3)',
-                backgroundColor: 'transparent',
-                color: 'var(--color-accent)',
-                fontSize: '15px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseDown={(e) => {
-                e.currentTarget.style.transform = 'scale(0.97)';
-                e.currentTarget.style.backgroundColor = 'rgba(215, 149, 176, 0.08)';
-              }}
-              onMouseUp={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              Закрыть
+              Перейти в каталог
             </button>
           </div>
         </div>
