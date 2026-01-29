@@ -11,10 +11,36 @@ import { BottomNavigation } from '../components/BottomNavigation';
 import { AppFooter } from '../components/AppFooter';
 
 const PROFILE_ME_CACHE_KEY = 'profile_me_cache';
+const PROFILE_ORDERS_CACHE_KEY = 'profile_orders_cache';
 
 interface ProfileMeCacheEntry {
   data: UserMeResponse;
   fetchedAt: number;
+}
+
+interface ProfileOrdersCacheEntry {
+  orders: OrdersListItem[];
+  fetchedAt: number;
+}
+
+function readProfileOrdersCache(): ProfileOrdersCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_ORDERS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ProfileOrdersCacheEntry;
+    if (!Array.isArray(parsed?.orders)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeProfileOrdersCache(entry: ProfileOrdersCacheEntry): void {
+  try {
+    localStorage.setItem(PROFILE_ORDERS_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore
+  }
 }
 
 function readProfileCache(): ProfileMeCacheEntry | null {
@@ -53,6 +79,7 @@ export default function ProfilePage() {
   const [orders, setOrders] = useState<OrdersListItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [ordersFetchedAt, setOrdersFetchedAt] = useState<number | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [orderDetails, setOrderDetails] = useState<Record<number, OrderStatusResponse>>({});
   const [orderDetailsLoading, setOrderDetailsLoading] = useState<Record<number, boolean>>({});
@@ -183,35 +210,62 @@ export default function ProfilePage() {
     }
   }, [location.search]);
 
+  const loadOrders = useCallback(() => {
+    const cached = readProfileOrdersCache();
+    const hadCache = Boolean(cached?.orders);
+    if (cached?.orders) {
+      setOrders(cached.orders);
+      setOrdersFetchedAt(cached.fetchedAt);
+      setOrdersError(null);
+    }
+    setOrdersLoading(true);
+    getOrders()
+      .then((data) => {
+        setOrders(data);
+        const now = Date.now();
+        setOrdersFetchedAt(now);
+        setOrdersError(null);
+        writeProfileOrdersCache({ orders: data, fetchedAt: now });
+      })
+      .catch((error) => {
+        console.error('Failed to load orders:', error);
+        setOrdersError(hadCache ? 'Не удалось обновить' : 'Не удалось загрузить заказы. Попробуйте позже.');
+      })
+      .finally(() => {
+        setOrdersLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'orders') {
       return;
     }
-
+    const cached = readProfileOrdersCache();
+    const hadCache = Boolean(cached?.orders);
+    if (cached?.orders) {
+      setOrders(cached.orders);
+      setOrdersFetchedAt(cached.fetchedAt);
+      setOrdersError(null);
+    }
     let isActive = true;
     setOrdersLoading(true);
-    setOrdersError(null);
-
     getOrders()
       .then((data) => {
-        if (!isActive) {
-          return;
-        }
+        if (!isActive) return;
         setOrders(data);
+        const now = Date.now();
+        setOrdersFetchedAt(now);
+        setOrdersError(null);
+        writeProfileOrdersCache({ orders: data, fetchedAt: now });
       })
       .catch((error) => {
-        if (!isActive) {
-          return;
-        }
+        if (!isActive) return;
         console.error('Failed to load orders:', error);
-        setOrdersError('Не удалось загрузить заказы. Попробуйте позже.');
+        setOrdersError(hadCache ? 'Не удалось обновить' : 'Не удалось загрузить заказы. Попробуйте позже.');
       })
       .finally(() => {
-        if (isActive) {
-          setOrdersLoading(false);
-        }
+        if (isActive) setOrdersLoading(false);
       });
-
     return () => {
       isActive = false;
     };
@@ -626,7 +680,7 @@ export default function ProfilePage() {
             border: '1px solid var(--border-light)'
           }}>
             <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
-              Контакт и бонусы
+              Приветственный бонус
             </div>
             <div style={{
               padding: '12px',
@@ -994,30 +1048,50 @@ export default function ProfilePage() {
 
         {activeTab === 'orders' && (
           <div>
-            {!ordersLoading && !ordersError && orders.length > 0 && (
-              <div style={{ marginBottom: '12px' }}>
+            {/* Orders freshness banner */}
+            <div style={{
+              fontSize: '12px',
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              marginBottom: '12px',
+            }}>
+              {ordersLoading && ordersFetchedAt
+                ? 'Обновление…'
+                : ordersFetchedAt
+                  ? `Данные заказов актуальны на ${formatMeFetchedAt(ordersFetchedAt)}`
+                  : null}
+            </div>
+            {/* Background refresh error: small banner + retry when we have cached orders */}
+            {ordersError && orders.length > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-secondary)',
+                marginBottom: '12px',
+              }}>
+                <span style={{ fontSize: '13px', color: 'var(--color-error)' }}>Не удалось обновить</span>
                 <button
-                  onClick={() => {
-                    WebApp.showConfirm('Очистить список заказов с экрана? При следующем открытии вкладки заказы снова подгрузятся.', (ok) => {
-                      if (ok) setOrders([]);
-                    });
-                  }}
+                  type="button"
+                  onClick={loadOrders}
                   style={{
-                    width: '100%',
-                    padding: '10px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-soft)',
-                    backgroundColor: 'var(--bg-surface)',
-                    color: 'var(--text-secondary)',
-                    fontSize: '14px',
-                    cursor: 'pointer'
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: 'var(--color-accent)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
                   }}
                 >
-                  Очистить историю заказов
+                  Повторить
                 </button>
               </div>
             )}
-            {ordersLoading && (
+            {ordersLoading && !orders.length && (
               <div style={{
                 textAlign: 'center',
                 padding: '20px',
@@ -1026,13 +1100,31 @@ export default function ProfilePage() {
                 Загрузка заказов...
               </div>
             )}
-            {ordersError && (
+            {ordersError && orders.length === 0 && (
               <div style={{
                 textAlign: 'center',
                 padding: '20px',
                 color: 'var(--color-error)'
               }}>
                 {ordersError}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={loadOrders}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: 'var(--color-accent)',
+                      color: 'var(--text-on-accent)',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Повторить
+                  </button>
+                </div>
               </div>
             )}
             {!ordersLoading && !ordersError && orders.length === 0 && (
@@ -1045,7 +1137,7 @@ export default function ProfilePage() {
                 <p style={{ fontSize: '14px' }}>Ваши заказы будут отображаться здесь</p>
               </div>
             )}
-            {!ordersLoading && !ordersError && orders.length > 0 && (
+            {orders.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {orders.map((order) => (
                   <div
