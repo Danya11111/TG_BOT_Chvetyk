@@ -36,6 +36,34 @@ function createClient(): AxiosInstance {
 
 const client = createClient();
 
+const RETRY_DELAYS_MS = [1000, 2000];
+
+function shouldRetry(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const ax = err as { code?: string; response?: { status?: number } };
+  if (ax.code === 'ECONNABORTED') return true;
+  if (ax.response?.status != null && ax.response.status >= 500) return true;
+  if (!ax.response) return true; // network error
+  return false;
+}
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < RETRY_DELAYS_MS.length && shouldRetry(err)) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw lastError;
+}
+
 function buildQuery(params: FloriaProductsParams): Record<string, string | number> {
   const q: Record<string, string | number> = {};
   if (params.categoryId !== undefined) q.categoryId = params.categoryId;
@@ -49,11 +77,14 @@ function buildQuery(params: FloriaProductsParams): Record<string, string | numbe
 
 /**
  * GET /api/products with optional filters. Returns array of Floria product objects.
+ * Retries up to 2 times on network error, timeout, or 5xx.
  */
 export async function getFloriaProducts(params: FloriaProductsParams = {}): Promise<FloriaProductRaw[]> {
   const query = buildQuery(params);
-  const response = await client.get<FloriaProductRaw[]>('/api/products', { params: query });
-  const data = response.data;
+  const data = await withRetry(async () => {
+    const response = await client.get<FloriaProductRaw[]>('/api/products', { params: query });
+    return response.data;
+  });
   if (!Array.isArray(data)) {
     logger.warn('Floria API returned non-array', { type: typeof data });
     return [];

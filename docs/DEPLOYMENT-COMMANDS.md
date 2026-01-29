@@ -72,6 +72,16 @@ docker compose build --no-cache backend
 docker compose up -d backend
 ```
 
+## Апгрейд сервера (VDS)
+
+При переходе на более мощный VDS (например, 2 CPU, 4 GB RAM) нужно пересчитать лимиты в `docker-compose.yml`:
+
+- **postgres:** `deploy.resources.limits.memory`, `command` (shared_buffers, work_mem, maintenance_work_mem) — можно увеличить под доступную память.
+- **redis:** `deploy.resources.limits.memory`, `command` (--maxmemory) — пропорционально увеличить.
+- **backend:** `deploy.resources.limits.memory`, `reservations.memory`, `NODE_OPTIONS: "--max-old-space-size=..."` — увеличить под новый объём RAM.
+
+Текущие значения в `docker-compose.yml` рассчитаны на сервер с 1 GB RAM.
+
 ## Важные напоминания
 
 ⚠️ **КРИТИЧНО:** Если `env.txt` был в публичном репозитории:

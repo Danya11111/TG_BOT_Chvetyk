@@ -1,3 +1,4 @@
+# Resource limits are tuned for a 1 GB RAM server. When upgrading VDS (e.g. 2 CPU, 4 GB), update postgres/redis/backend memory limits and NODE_OPTIONS in backend environment.
 services:
   # PostgreSQL Database (optimized for 1 GB server: 300M limit, reduced shared_buffers)
   postgres:

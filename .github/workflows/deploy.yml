@@ -30,3 +30,49 @@ jobs:
             docker compose exec -T backend npm run posiflora:sync
           debug: true
           use_insecure_cipher: false
+
+  verify:
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 5
+    steps:
+      - name: Verify deployment over SSH
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          timeout: 30s
+          command_timeout: 2m
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            echo "=== Containers status ==="
+            docker compose ps -a
+            RUNNING=$(docker compose ps -q --status running | wc -l)
+            if [ "$RUNNING" -lt 3 ]; then
+              echo "Expected at least 3 running containers, got $RUNNING"
+              exit 1
+            fi
+            echo "=== Health check ==="
+            docker compose exec -T backend node -e "
+              const http = require('http');
+              const opts = { hostname: 'localhost', port: 3000, path: '/health', method: 'GET' };
+              const req = http.request(opts, (res) => {
+                let body = '';
+                res.on('data', d => body += d);
+                res.on('end', () => {
+                  const data = JSON.parse(body);
+                  if (data.database && data.redis) process.exit(0);
+                  console.error('Health check failed:', data);
+                  process.exit(1);
+                });
+              });
+              req.on('error', (e) => { console.error(e); process.exit(1); });
+              req.setTimeout(10000, () => { req.destroy(); process.exit(1); });
+              req.end();
+            "
+            echo "Health check passed: database and redis OK"
+          debug: true
+          use_insecure_cipher: false
