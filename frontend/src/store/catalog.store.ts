@@ -3,7 +3,65 @@ import {
   fetchCategories as loadCategories,
   fetchProducts as loadProducts,
 } from '../services/catalog.service';
-import { Category, Product } from '../types/catalog';
+import { Category, Pagination, Product } from '../types/catalog';
+
+const CATALOG_CACHE_KEY = 'catalog_cache';
+
+interface CatalogCacheParams {
+  categoryId?: number;
+  search: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStockOnly: boolean;
+  sort: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
+  page: number;
+  limit: number;
+}
+
+interface CatalogCacheEntry {
+  products: Product[];
+  pagination?: Pagination;
+  fetchedAt: number;
+  params: CatalogCacheParams;
+}
+
+function getCurrentParams(get: () => CatalogState): CatalogCacheParams {
+  const state = get();
+  return {
+    categoryId: state.selectedCategoryId,
+    search: state.searchQuery,
+    minPrice: state.minPrice,
+    maxPrice: state.maxPrice,
+    inStockOnly: state.inStockOnly,
+    sort: state.sort,
+    page: 1,
+    limit: 10,
+  };
+}
+
+function paramsMatch(a: CatalogCacheParams, b: CatalogCacheParams): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function readCatalogCache(): CatalogCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CatalogCacheEntry;
+    if (!parsed?.products?.length || !parsed.fetchedAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCatalogCache(entry: CatalogCacheEntry): void {
+  try {
+    localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore quota or parse errors
+  }
+}
 
 interface CatalogState {
   products: Product[];
@@ -19,6 +77,7 @@ interface CatalogState {
   page: number;
   hasMore: boolean;
   error?: string;
+  lastFetchedAt: number | null;
   fetchCategories: () => Promise<void>;
   fetchProducts: () => Promise<void>;
   fetchMoreProducts: () => Promise<void>;
@@ -42,6 +101,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   page: 1,
   hasMore: true,
   error: undefined,
+  lastFetchedAt: null,
 
   async fetchCategories() {
     const categories = await loadCategories();
@@ -49,27 +109,58 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   async fetchProducts() {
-    set({ loading: true, error: undefined, page: 1, hasMore: true });
+    const currentParams = getCurrentParams(get);
+    const cached = readCatalogCache();
+    const hasMatchingCache = cached && paramsMatch(cached.params, currentParams);
+
+    if (hasMatchingCache && cached) {
+      const totalPages = cached.pagination?.totalPages ?? 1;
+      set({
+        products: cached.products,
+        page: 1,
+        hasMore: totalPages > 1 && cached.products.length > 0,
+        lastFetchedAt: cached.fetchedAt,
+        error: undefined,
+        loading: true,
+      });
+    } else {
+      set({ loading: true, error: undefined, page: 1, hasMore: true, products: [] });
+    }
+
     try {
       const { products, pagination } = await loadProducts({
-        categoryId: get().selectedCategoryId,
-        search: get().searchQuery,
-        minPrice: get().minPrice,
-        maxPrice: get().maxPrice,
-        inStock: get().inStockOnly ? true : undefined,
-        sort: get().sort,
+        categoryId: currentParams.categoryId,
+        search: currentParams.search,
+        minPrice: currentParams.minPrice,
+        maxPrice: currentParams.maxPrice,
+        inStock: currentParams.inStockOnly ? true : undefined,
+        sort: currentParams.sort,
         page: 1,
         limit: 10,
       });
       const totalPages = pagination?.totalPages ?? 1;
+      const now = Date.now();
       set({
         products,
         page: 1,
         hasMore: totalPages > 1 && products.length > 0,
+        lastFetchedAt: now,
+        error: undefined,
+      });
+      writeCatalogCache({
+        products,
+        pagination,
+        fetchedAt: now,
+        params: currentParams,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось загрузить товары';
-      set({ error: message || 'Не удалось загрузить товары', hasMore: false });
+      const finalMessage = message || 'Не удалось загрузить товары';
+      if (get().products.length > 0) {
+        set({ error: finalMessage });
+      } else {
+        set({ error: finalMessage, hasMore: false });
+      }
     } finally {
       set({ loading: false });
     }

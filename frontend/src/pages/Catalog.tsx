@@ -35,7 +35,18 @@ export default function CatalogPage() {
     setSort,
     products,
     hasMore,
+    lastFetchedAt,
   } = useCatalogStore();
+
+  const formatFetchedAt = (ts: number) => {
+    const d = new Date(ts);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}.${mm}.${yyyy}, ${hh}:${min}`;
+  };
 
   useEffect(() => {
     // Use theme colors for Telegram UI
@@ -103,7 +114,7 @@ export default function CatalogPage() {
     navigate(`/product/${product.id}`);
   };
 
-  // Loading Skeleton
+  // Loading Skeleton (only when no cached data)
   if (loading && !products.length) {
     return (
       <div className="catalog-page">
@@ -121,7 +132,8 @@ export default function CatalogPage() {
     );
   }
 
-  if (error) {
+  // Full-screen error only when no products (no cache)
+  if (error && !products.length) {
     return (
       <div className="catalog-error-container">
         <div className="catalog-error-content">
@@ -129,7 +141,7 @@ export default function CatalogPage() {
           <p style={{ marginTop: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
             {error}
           </p>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+          <button className="btn btn-primary" onClick={() => fetchProducts()}>
             Обновить
           </button>
         </div>
@@ -258,6 +270,48 @@ export default function CatalogPage() {
             )}
           </>
         )}
+      </div>
+
+      {/* Data freshness banner and background refresh error */}
+      <div className="container" style={{ paddingTop: '8px', paddingBottom: '8px' }}>
+        {error && products.length > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            backgroundColor: 'var(--bg-secondary)',
+            marginBottom: '8px',
+          }}>
+            <span style={{ fontSize: '13px', color: 'var(--color-error)' }}>
+              Не удалось обновить
+            </span>
+            <button
+              type="button"
+              onClick={() => fetchProducts()}
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-accent)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+              }}
+            >
+              Повторить
+            </button>
+          </div>
+        )}
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
+          {loading && products.length > 0
+            ? 'Обновление…'
+            : lastFetchedAt
+              ? `Данные актуальны на ${formatFetchedAt(lastFetchedAt)}`
+              : null}
+        </div>
       </div>
 
       {/* Floating Cart Button */}
