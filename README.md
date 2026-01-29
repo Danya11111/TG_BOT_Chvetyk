@@ -148,6 +148,41 @@ Telegram-бот с мини-приложением для автоматизац
    npm run dev
    ```
 
+### Развёртывание на сервере (VPS без Docker)
+
+В корне репозитория нет `package.json` — бэкенд и фронт в отдельных папках. На сервере:
+
+1. **Клонируйте репозиторий и перейдите в backend**
+   ```bash
+   cd /opt/TG_BOT_Chvetyk/TG_BOT_Chvetyk/backend
+   ```
+
+2. **Установите зависимости** (обязательно без `--production`, чтобы установились TypeScript и dev-зависимости для сборки)
+   ```bash
+   npm install
+   ```
+
+3. **Соберите проект**
+   ```bash
+   npm run build
+   ```
+
+4. **Запустите бэкенд**
+   ```bash
+   npm start
+   ```
+
+   Для работы в фоне через PM2:
+   ```bash
+   pm2 start dist/index.js --name chvetyk-backend
+   pm2 save
+   pm2 startup
+   ```
+
+5. **Файл `.env`** должен лежать в папке `backend/` (скопируйте с локальной машины или создайте вручную). Обязательные переменные: `TELEGRAM_BOT_TOKEN`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `FLORIA_API_TOKEN`, в production — `API_URL`, `WEBAPP_URL`, `CORS_ORIGIN`.
+
+**Важно:** не запускайте `npm run dev` из корня проекта (`/opt/TG_BOT_Chvetyk/TG_BOT_Chvetyk`) — там нет `package.json`. Всегда переходите в `backend/` или `frontend/`.
+
 ### Настройка Telegram Bot
 
 1. Получите токен бота от [@BotFather](https://t.me/BotFather)
