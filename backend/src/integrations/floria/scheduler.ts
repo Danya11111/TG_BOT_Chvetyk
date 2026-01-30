@@ -37,6 +37,9 @@ export function startFloriaScheduler(): void {
   cron.schedule(cronExpression, runSync);
 
   if (config.floria.syncOnStartup) {
-    runSync().catch((error) => logger.error('Floria sync initial run failed', error));
+    const startupDelayMs = 8000;
+    setTimeout(() => {
+      runSync().catch((error) => logger.error('Floria sync initial run failed', error));
+    }, startupDelayMs);
   }
 }
