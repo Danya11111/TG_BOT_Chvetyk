@@ -241,8 +241,19 @@ export default function CatalogPage() {
         {products.length === 0 ? (
           <div className="catalog-empty">
             <div className="catalog-empty__icon">🥀</div>
-            <h3>Ничего не найдено</h3>
-            <p>Попробуйте изменить запрос</p>
+            <h3>{searchQuery.trim() ? 'Ничего не найдено' : 'Каталог пуст или загружается'}</h3>
+            <p>{searchQuery.trim() ? 'Попробуйте изменить запрос' : 'Нажмите кнопку ниже, чтобы загрузить товары'}</p>
+            {!searchQuery.trim() && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => fetchProducts()}
+                disabled={loading}
+                style={{ marginTop: '12px' }}
+              >
+                {loading ? 'Загрузка…' : 'Обновить каталог'}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -308,7 +319,7 @@ export default function CatalogPage() {
         <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
           {loading && products.length > 0
             ? 'Обновление…'
-            : lastFetchedAt
+            : lastFetchedAt && products.length > 0
               ? `Данные актуальны на ${formatFetchedAt(lastFetchedAt)}`
               : null}
         </div>

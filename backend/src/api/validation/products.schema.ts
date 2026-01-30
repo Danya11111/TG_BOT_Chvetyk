@@ -1,7 +1,7 @@
 import Joi from 'joi';
 
 export const productListQuerySchema = Joi.object({
-  categoryId: Joi.number().integer().positive().optional(),
+  categoryId: Joi.number().integer().min(-1).optional(),
   categorySlug: Joi.string().trim().max(200).optional(),
   search: Joi.string().trim().max(200).optional(),
   inStock: Joi.boolean().optional(),

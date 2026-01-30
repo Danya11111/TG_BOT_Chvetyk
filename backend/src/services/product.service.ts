@@ -1,6 +1,10 @@
 import { NotFoundError } from '../utils/errors';
 import { db } from '../database/connection';
 import { PaginationResult } from '../types/pagination';
+import { getFloriaProducts, getFloriaProductById } from '../integrations/floria/client';
+import { mapFloriaProductToProduct } from '../integrations/floria/mapper';
+import { syncFloriaProductsToSnapshot } from '../integrations/floria/sync.service';
+import { logger } from '../utils/logger';
 
 export interface Product {
   id: number;
@@ -146,7 +150,49 @@ export class ProductService {
       [...params, limit, offset]
     );
 
-    const products: Product[] = dataResult.rows.map(rowToProduct);
+    let products: Product[] = dataResult.rows.map(rowToProduct);
+
+    if (products.length === 0 && page === 1 && !(search && search.trim()) && (categoryId === undefined || categoryId === 0)) {
+      try {
+        const raw = await getFloriaProducts({
+          categoryId: categoryId ?? 0,
+          limit,
+          offset: 0,
+          needComposition: 0,
+        });
+        products = raw.map((item) => {
+          const mapped = mapFloriaProductToProduct(item);
+          const synced = new Date();
+          return {
+            id: mapped.id,
+            name: mapped.name,
+            price: mapped.price,
+            old_price: mapped.old_price,
+            currency: mapped.currency,
+            category_name: mapped.category_name,
+            images: mapped.images,
+            in_stock: mapped.in_stock,
+            composition: mapped.composition,
+            attributes: mapped.attributes ?? {},
+            created_at: synced,
+            updated_at: synced,
+          };
+        });
+        const totalFromFloria = products.length < limit ? products.length : products.length + 1;
+        syncFloriaProductsToSnapshot().catch((err) => logger.error('Background Floria sync failed', err));
+        return {
+          data: products,
+          pagination: {
+            page: 1,
+            limit,
+            total: products.length < limit ? products.length : totalFromFloria,
+            totalPages: products.length < limit ? 1 : Math.ceil(totalFromFloria / limit),
+          },
+        };
+      } catch (fallbackErr) {
+        logger.warn('Floria fallback fetch failed', fallbackErr);
+      }
+    }
 
     return {
       data: products,
@@ -167,10 +213,35 @@ export class ProductService {
       [id]
     );
     const row = result.rows[0];
-    if (!row) {
+    if (row) {
+      return rowToProduct(row);
+    }
+    try {
+      const raw = await getFloriaProductById(id);
+      if (!raw) {
+        throw new NotFoundError(`Product with id ${id} not found`);
+      }
+      const mapped = mapFloriaProductToProduct(raw);
+      const synced = new Date();
+      return {
+        id: mapped.id,
+        name: mapped.name,
+        price: mapped.price,
+        old_price: mapped.old_price,
+        currency: mapped.currency,
+        category_name: mapped.category_name,
+        images: mapped.images,
+        in_stock: mapped.in_stock,
+        composition: mapped.composition,
+        attributes: mapped.attributes ?? {},
+        created_at: synced,
+        updated_at: synced,
+      };
+    } catch (err) {
+      if (err instanceof NotFoundError) throw err;
+      logger.warn('Floria fallback getProductById failed', err);
       throw new NotFoundError(`Product with id ${id} not found`);
     }
-    return rowToProduct(row);
   }
 }
 

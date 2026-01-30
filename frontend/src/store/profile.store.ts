@@ -52,6 +52,7 @@ export const useProfileStore = create<ProfileStore>()(
     {
       name: 'profile-storage',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ addresses: state.addresses }),
       migrate: (persistedState) => {
         const state = persistedState as ProfileStore | undefined;
         if (!state?.addresses) {

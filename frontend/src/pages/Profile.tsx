@@ -313,7 +313,8 @@ export default function ProfilePage() {
     };
   };
 
-  const handleSaveAddress = () => {
+  const handleSaveAddress = (e?: React.MouseEvent) => {
+    e?.preventDefault?.();
     if (!address.street.trim() || !address.house.trim()) {
       WebApp.showAlert('Укажите улицу и дом.');
       return;
@@ -322,13 +323,10 @@ export default function ProfilePage() {
     const addressToSave = formatAddressForSave(address);
 
     if (editingIndex !== null && editingIndex >= 0 && editingIndex < addresses.length) {
-      // Обновляем существующий адрес
       try {
         updateAddress(editingIndex, addressToSave);
-        // Сбрасываем состояние редактирования ПЕРЕД показом алерта
         setEditingIndex(null);
         setAddress({ city: '', street: '', house: '', apartment: '' });
-        // Небольшая задержка для обновления UI
         setTimeout(() => {
           WebApp.showAlert('Адрес обновлен!');
         }, 100);
@@ -337,7 +335,6 @@ export default function ProfilePage() {
         WebApp.showAlert('Ошибка при обновлении адреса. Попробуйте еще раз.');
       }
     } else {
-      // Добавляем новый адрес
       try {
         addAddress(addressToSave);
         setAddress({ city: '', street: '', house: '', apartment: '' });
@@ -1009,7 +1006,8 @@ export default function ProfilePage() {
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={handleSaveAddress}
+                type="button"
+                onClick={(e) => handleSaveAddress(e)}
                 style={{
                   flex: 1,
                   padding: '12px',
