@@ -19,7 +19,8 @@
     "migrate:sql": "psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f src/database/migrations/001_initial_schema.sql",
     "seed": "tsx src/database/seed.ts",
     "seed:prod": "node dist/database/seed.js",
-    "posiflora:sync": "node dist/integrations/posiflora/run-sync.js"
+    "posiflora:sync": "node dist/integrations/posiflora/run-sync.js",
+    "floria:check": "node dist/integrations/floria/check.js"
   },
   "keywords": [
     "telegram",

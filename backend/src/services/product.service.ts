@@ -6,6 +6,11 @@ import { mapFloriaProductToProduct } from '../integrations/floria/mapper';
 import { syncFloriaProductsToSnapshot } from '../integrations/floria/sync.service';
 import { logger } from '../utils/logger';
 
+/**
+ * Каталог товаров — только Floria (таблица floria_products_snapshot).
+ * Posiflora не используется для отображения каталога.
+ */
+
 export interface Product {
   id: number;
   posiflora_id?: string;

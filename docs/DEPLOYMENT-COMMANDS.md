@@ -54,6 +54,16 @@ docker compose logs --tail=50 backend
 curl http://localhost:3000/health
 ```
 
+### Проверка каталога Floria (есть ли товары)
+
+Товары в приложении берутся **только из Floria** (таблица `floria_products_snapshot`). Чтобы убедиться, что в Floria API есть товары:
+
+```bash
+docker compose exec backend npm run floria:check
+```
+
+Скрипт выведет URL Floria API, количество товаров в выборке и первые 3 названия. Если видите «Floria products (sample): 0» — проверьте на сервере переменные `FLORIA_API_BASE_URL` и `FLORIA_API_TOKEN` в `.env` и что Floria API доступен.
+
 Должен вернуть JSON с `database: true` и `redis: true`.
 
 ### Проверка логов
