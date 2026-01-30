@@ -54,6 +54,8 @@ export const config = {
     apiBaseUrl: process.env.FLORIA_API_BASE_URL || 'https://flowers5-serv.uplinkweb.ru/5042',
     token: process.env.FLORIA_API_TOKEN || '',
     requestTimeoutMs: parseInt(process.env.FLORIA_REQUEST_TIMEOUT_MS || '15000', 10),
+    syncCron: process.env.FLORIA_SYNC_CRON || '0,20,40 * * * *',
+    syncOnStartup: process.env.FLORIA_SYNC_ON_STARTUP !== 'false',
   },
 
   // Posiflora API
@@ -74,7 +76,7 @@ export const config = {
     deliveryTimeWindowMinutes: parseInt(process.env.POSIFLORA_DELIVERY_TIME_WINDOW_MINUTES || '60', 10),
     requestTimeoutMs: parseInt(process.env.POSIFLORA_REQUEST_TIMEOUT_MS || '15000', 10),
     syncEnabled: process.env.POSIFLORA_SYNC_ENABLED === 'true',
-    syncCron: process.env.POSIFLORA_SYNC_CRON || '0 * * * *',
+    syncCron: process.env.POSIFLORA_SYNC_CRON || '10,30,50 * * * *',
     syncOnStartup: process.env.POSIFLORA_SYNC_ON_STARTUP !== 'false',
     catalogPageSize: parseInt(process.env.POSIFLORA_CATALOG_PAGE_SIZE || '50', 10),
     includeItemDetails: process.env.POSIFLORA_INCLUDE_ITEM_DETAILS !== 'false',

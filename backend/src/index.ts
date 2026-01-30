@@ -6,6 +6,7 @@ import { runMigrations } from './database/migrate';
 import { startBot } from './bot/bot';
 import { startSupportAutoCloseScheduler } from './bot/support/support.autoclose';
 import { startPosifloraScheduler } from './integrations/posiflora/scheduler';
+import { startFloriaScheduler } from './integrations/floria/scheduler';
 
 async function startServer(): Promise<void> {
   try {
@@ -144,12 +145,20 @@ async function startServer(): Promise<void> {
       logger.warn('Continuing without bot...');
     }
 
-    // Запуск синхронизации Posiflora
+    // Запуск синхронизации Posiflora (клиенты: :10, :30, :50)
     try {
       startPosifloraScheduler();
     } catch (error) {
       logger.error('Failed to start Posiflora sync scheduler:', error);
       logger.warn('Continuing without Posiflora sync...');
+    }
+
+    // Запуск синхронизации Floria (каталог: :00, :20, :40; при старте — загрузка товаров в БД)
+    try {
+      startFloriaScheduler();
+    } catch (error) {
+      logger.error('Failed to start Floria sync scheduler:', error);
+      logger.warn('Continuing without Floria catalog sync...');
     }
 
     // Graceful shutdown

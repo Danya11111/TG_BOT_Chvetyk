@@ -1,4 +1,15 @@
+import { isAxiosError } from 'axios';
 import apiClient from './client';
+
+const RETRY_DELAYS_MS = [1000, 2000];
+
+function shouldRetryGetMe(err: unknown): boolean {
+  if (isAxiosError(err) && err.response?.status != null) {
+    const status = err.response.status;
+    if (status >= 400 && status < 500) return false;
+  }
+  return true;
+}
 
 export type UserTier = {
   title: string;
@@ -30,8 +41,21 @@ export type ClaimWelcomeBonusResponse = {
 };
 
 export async function getMe(): Promise<UserMeResponse> {
-  const response = await apiClient.get('/api/users/me');
-  return response.data?.data;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const response = await apiClient.get('/api/users/me');
+      return response.data?.data;
+    } catch (err) {
+      lastError = err;
+      if (attempt < RETRY_DELAYS_MS.length && shouldRetryGetMe(err)) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw lastError;
 }
 
 export async function updateMe(payload: { phone?: string; name?: string; email?: string }): Promise<UserMeResponse> {

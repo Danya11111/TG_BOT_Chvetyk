@@ -1,10 +1,6 @@
-import { logger } from '../utils/logger';
 import { NotFoundError } from '../utils/errors';
-import { cache } from '../database/redis';
-import { CACHE_TTL } from '../utils/constants';
+import { db } from '../database/connection';
 import { PaginationResult } from '../types/pagination';
-import { getFloriaProducts, getFloriaProductById } from '../integrations/floria/client';
-import { mapFloriaProductToProduct } from '../integrations/floria/mapper';
 
 export interface Product {
   id: number;
@@ -46,106 +42,135 @@ export interface ProductsResponse {
   pagination: PaginationResult;
 }
 
+function rowToProduct(row: {
+  floria_id: number;
+  name: string;
+  price: string;
+  old_price: string | null;
+  currency: string;
+  category_name: string | null;
+  images: unknown;
+  in_stock: boolean;
+  composition: string | null;
+  attributes: unknown;
+  synced_at: Date;
+}): Product {
+  const images = Array.isArray(row.images)
+    ? (row.images as string[])
+    : typeof row.images === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(row.images);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+  const attributes =
+    row.attributes && typeof row.attributes === 'object' && !Array.isArray(row.attributes)
+      ? (row.attributes as Record<string, unknown>)
+      : {};
+  const synced = row.synced_at ? new Date(row.synced_at) : new Date();
+  return {
+    id: row.floria_id,
+    name: row.name,
+    price: parseFloat(String(row.price)) || 0,
+    old_price: row.old_price != null ? parseFloat(String(row.old_price)) : undefined,
+    currency: row.currency || 'RUB',
+    category_name: row.category_name ?? undefined,
+    images,
+    in_stock: Boolean(row.in_stock),
+    composition: row.composition ?? undefined,
+    attributes,
+    created_at: synced,
+    updated_at: synced,
+  };
+}
+
+function orderByClause(sort: string): string {
+  switch (sort) {
+    case 'price_asc':
+      return 'price ASC NULLS LAST';
+    case 'price_desc':
+      return 'price DESC NULLS LAST';
+    case 'oldest':
+      return 'synced_at ASC NULLS LAST';
+    case 'newest':
+    default:
+      return 'synced_at DESC NULLS LAST';
+  }
+}
+
 export class ProductService {
   async getProducts(filters: ProductFilters = {}): Promise<ProductsResponse> {
-    try {
-      const {
-        categoryId,
-        search,
-        page = 1,
-        limit = 20,
-      } = filters;
+    const {
+      categoryId,
+      search,
+      page = 1,
+      limit = 20,
+      sort = 'newest',
+    } = filters;
 
-      const cacheKey = `products:floria:${JSON.stringify({ categoryId, search, page, limit })}`;
-      const cached = await cache.get<ProductsResponse>(cacheKey);
-      if (cached) {
-        return cached;
-      }
+    const conditions: string[] = ['1=1'];
+    const params: unknown[] = [];
+    let paramIndex = 1;
 
-      const offset = (page - 1) * limit;
-      const raw = await getFloriaProducts({
-        categoryId: categoryId ?? 0,
-        limit,
-        offset,
-        searchQuery: search && search.trim() ? search.trim() : undefined,
-        needComposition: 0,
-      });
-
-      const products: Product[] = raw.map((item) => {
-        const mapped = mapFloriaProductToProduct(item);
-        return {
-          id: mapped.id,
-          name: mapped.name,
-          price: mapped.price,
-          old_price: mapped.old_price,
-          currency: mapped.currency,
-          category_name: mapped.category_name,
-          images: mapped.images,
-          in_stock: mapped.in_stock,
-          attributes: mapped.attributes,
-          created_at: mapped.created_at,
-          updated_at: mapped.updated_at,
-        } as Product;
-      });
-
-      const total = (page - 1) * limit + products.length;
-      const totalPages = products.length < limit ? page : page + 1;
-
-      const response: ProductsResponse = {
-        data: products,
-        pagination: {
-          page,
-          limit,
-          total: products.length < limit ? total : total + 1,
-          totalPages,
-        },
-      };
-
-      await cache.set(cacheKey, response, CACHE_TTL.PRODUCTS);
-
-      return response;
-    } catch (error) {
-      logger.error('Error fetching products from Floria:', error);
-      throw error;
+    if (categoryId === -1) {
+      conditions.push(`in_showcase = true`);
     }
+
+    if (search && search.trim()) {
+      conditions.push(`name ILIKE $${paramIndex}`);
+      params.push(`%${search.trim()}%`);
+      paramIndex += 1;
+    }
+
+    const whereSql = conditions.join(' AND ');
+    const orderSql = orderByClause(sort);
+    const offset = (page - 1) * limit;
+
+    const countResult = await db.query(
+      `SELECT COUNT(*)::int AS total FROM floria_products_snapshot WHERE ${whereSql}`,
+      params
+    );
+    const total = countResult.rows[0]?.total ?? 0;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    const dataResult = await db.query(
+      `SELECT floria_id, name, price, old_price, currency, category_name, images, in_stock, composition, attributes, synced_at
+       FROM floria_products_snapshot
+       WHERE ${whereSql}
+       ORDER BY ${orderSql}
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
+
+    const products: Product[] = dataResult.rows.map(rowToProduct);
+
+    return {
+      data: products,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
   }
 
   async getProductById(id: number): Promise<Product> {
-    try {
-      const cacheKey = `product:floria:${id}`;
-      const cached = await cache.get<Product>(cacheKey);
-      if (cached) {
-        return cached;
-      }
-
-      const raw = await getFloriaProductById(id);
-      if (!raw) {
-        throw new NotFoundError(`Product with id ${id} not found`);
-      }
-
-      const mapped = mapFloriaProductToProduct(raw);
-      const product: Product = {
-        id: mapped.id,
-        name: mapped.name,
-        price: mapped.price,
-        old_price: mapped.old_price,
-        currency: mapped.currency,
-        category_name: mapped.category_name,
-        images: mapped.images,
-        in_stock: mapped.in_stock,
-        composition: mapped.composition,
-        attributes: mapped.attributes,
-        created_at: mapped.created_at,
-        updated_at: mapped.updated_at,
-      };
-
-      await cache.set(cacheKey, product, CACHE_TTL.PRODUCTS);
-
-      return product;
-    } catch (error) {
-      logger.error(`Error fetching product ${id} from Floria:`, error);
-      throw error;
+    const result = await db.query(
+      `SELECT floria_id, name, price, old_price, currency, category_name, images, in_stock, composition, attributes, synced_at
+       FROM floria_products_snapshot
+       WHERE floria_id = $1`,
+      [id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundError(`Product with id ${id} not found`);
     }
+    return rowToProduct(row);
   }
 }
 

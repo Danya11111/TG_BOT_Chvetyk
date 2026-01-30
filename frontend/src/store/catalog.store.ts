@@ -123,6 +123,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         error: undefined,
         loading: true,
       });
+    } else if (cached) {
+      const totalPages = cached.pagination?.totalPages ?? 1;
+      set({
+        products: cached.products,
+        page: 1,
+        hasMore: totalPages > 1 && cached.products.length > 0,
+        lastFetchedAt: cached.fetchedAt,
+        error: undefined,
+        loading: true,
+      });
     } else {
       set({ loading: true, error: undefined, page: 1, hasMore: true, products: [] });
     }
