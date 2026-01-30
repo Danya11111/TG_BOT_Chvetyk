@@ -45,6 +45,11 @@ curl http://localhost:3000/health
 docker compose logs backend | grep -i "redacted"
 ```
 
+### После деплоя (каталог из снимка Floria)
+- Убедитесь, что `RUN_MIGRATIONS=true` в `.env` на сервере (или миграции выполняются в CI), чтобы при старте backend создалась таблица `floria_products_snapshot`.
+- При первом старте backend загружает каталог в БД (sync Floria). В логах должны быть строки: `Floria products sync started`, `Floria products sync finished`.
+- Проверка каталога: запрос к API `/api/products` должен возвращать товары из БД без вызова Floria в момент запроса.
+
 ## Если возникли проблемы
 
 ### Проблема: Контейнер не запускается
