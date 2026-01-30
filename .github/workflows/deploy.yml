@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:  # Ручной запуск: Actions → Deploy to server → Run workflow
 
 jobs:
   deploy:
